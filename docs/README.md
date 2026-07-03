@@ -11,6 +11,7 @@ This directory documents the intended architecture and release roadmap for the C
 - [RETAIL_TOOLING_REFERENCES.md](RETAIL_TOOLING_REFERENCES.md) summarizes retail WoW tooling patterns this project should model.
 - [DECISIONS.md](DECISIONS.md) records intentional architecture decisions so future agents can distinguish them from accidental prototype constraints.
 - [ASSESSMENT.md](ASSESSMENT.md) assesses the prior conversation and identifies corrections or missing design work.
+- [data/normalized-schema.md](data/normalized-schema.md) documents the `coa-normalized-v1` artifact contract.
 
 ## Current Repository Snapshot
 
@@ -21,4 +22,3 @@ The current codebase has three prototype areas:
 - `CoADataLogger/`: minimal WotLK 3.3.5 addon scaffold that captures player-sourced combat events and basic snapshots to SavedVariables.
 
 The target architecture keeps those concerns separate. Scrapers produce versioned structured data. Analyzers validate and enrich it. Optimizers consume only normalized data. Addons and logs provide empirical calibration data. Web frontends display reports and collect user inputs, but do not own simulation logic.
-

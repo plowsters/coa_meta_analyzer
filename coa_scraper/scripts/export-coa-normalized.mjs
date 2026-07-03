@@ -13,6 +13,33 @@ const talents = payload.talents || {};
 const classes = talents.classes || [];
 const entriesByTab = talents.entriesByTab || {};
 const essenceByClass = talents.essenceByClass || {};
+const SCHEMA_VERSION = "coa-normalized-v1";
+
+const baseFieldSources = {
+  build_id: "payload.id",
+  build_slug: "payload.slug",
+  build_name: "payload.name",
+  class_id: "entry.classId",
+  class_name: "payload.talents.classes[classId].className",
+  tab_id: "entry.tabId",
+  tab_name: "payload.talents.classes[classId].tabs[tabId].tabName",
+  entry_type: "entry.entryType",
+  essence_kind: "entry.entryType with aeCost/teCost fallback",
+  entry_id: "entry id aliases",
+  spell_id: "entry spellId aliases",
+  name: "entry name aliases",
+  icon: "entry icon aliases",
+  costs: "entry.aeCost and entry.teCost",
+  requirements: "entry.reqTabAE, entry.reqTabTE, entry.requiredIds, entry.requiredLevel",
+  position: "entry.x and entry.y",
+  graph: "entry.connectedNodeIds",
+  description_html: "entry description aliases",
+  description_text: "description_html stripped locally",
+  tags: "local regex inference from name and description_text",
+  damage_schools: "local regex inference from name and description_text",
+  resources: "local regex inference from name and description_text",
+  raw: "original entry object"
+};
 
 const stripHtml = s =>
   typeof s === "string"
@@ -134,6 +161,13 @@ const flattenEntries = value => {
   return [];
 };
 
+const numericArray = value =>
+  Array.isArray(value)
+    ? value
+        .map(v => Number(v))
+        .filter(v => Number.isFinite(v) && v !== 0)
+    : [];
+
 const classById = new Map(classes.map(c => [Number(c.classId), c]));
 
 const tabByClassAndTab = new Map();
@@ -185,6 +219,7 @@ const getEssenceKind = entry => {
 };
 
 const normalizeClass = cls => ({
+  schema_version: SCHEMA_VERSION,
   class_id: Number(cls.classId),
   class_name: cls.className,
   tabs: (cls.tabs || [])
@@ -295,6 +330,9 @@ for (const [_bucketKey, value] of Object.entries(entriesByTab)) {
     const rawDescription = discoverDescription(entry);
     const description = stripHtml(rawDescription);
     const combinedText = `${name || ""} ${description || ""}`;
+    const tags = detectTags(combinedText);
+    const damageSchools = detectSchools(combinedText);
+    const resources = detectResources(combinedText);
 
     const aeCost = Number(entry.aeCost ?? 0);
     const teCost = Number(entry.teCost ?? 0);
@@ -302,6 +340,7 @@ for (const [_bucketKey, value] of Object.entries(entriesByTab)) {
     const reqTabTE = Number(entry.reqTabTE ?? 0);
 
     const rec = {
+      schema_version: SCHEMA_VERSION,
       build_id: payload.id,
       build_slug: payload.slug,
       build_name: payload.name,
@@ -322,9 +361,7 @@ for (const [_bucketKey, value] of Object.entries(entriesByTab)) {
 
       entry_id: discoverId(entry),
       spell_id: discoverSpellId(entry),
-      spell_ids: Array.isArray(entry.spellIds)
-        ? entry.spellIds.filter(Boolean)
-        : [],
+      spell_ids: numericArray(entry.spellIds),
 
       name,
       icon: discoverIcon(entry),
@@ -349,17 +386,25 @@ for (const [_bucketKey, value] of Object.entries(entriesByTab)) {
       is_passive: Boolean(entry.isPassive),
       is_starting_node: Boolean(entry.isStartingNode),
 
-      required_ids: Array.isArray(entry.requiredIds)
-        ? entry.requiredIds.filter(Boolean)
-        : [],
+      required_ids: numericArray(entry.requiredIds),
 
-      connected_node_ids: Array.isArray(entry.connectedNodeIds)
-        ? entry.connectedNodeIds.filter(Boolean)
-        : [],
+      connected_node_ids: numericArray(entry.connectedNodeIds),
 
-      tags: detectTags(combinedText),
-      damage_schools: detectSchools(combinedText),
-      resources: detectResources(combinedText),
+      tags,
+      damage_schools: damageSchools,
+      resources,
+
+      field_sources: baseFieldSources,
+      inferred: {
+        tags,
+        damage_schools: damageSchools,
+        resources,
+        confidence: {
+          tags: "medium",
+          damage_schools: "medium",
+          resources: "medium"
+        }
+      },
 
       raw: entry
     };

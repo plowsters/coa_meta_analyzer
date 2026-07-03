@@ -1,5 +1,6 @@
 [
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 12,
     "class_name": "Barbarian",
     "tabs": [
@@ -34,6 +35,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 13,
     "class_name": "Witch Doctor",
     "tabs": [
@@ -68,6 +70,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 14,
     "class_name": "Felsworn",
     "tabs": [
@@ -102,6 +105,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 15,
     "class_name": "Witch Hunter",
     "tabs": [
@@ -148,6 +152,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 16,
     "class_name": "Stormbringer",
     "tabs": [
@@ -182,6 +187,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 17,
     "class_name": "Knight of Xoroth",
     "tabs": [
@@ -216,6 +222,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 18,
     "class_name": "Guardian",
     "tabs": [
@@ -256,6 +263,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 19,
     "class_name": "Templar",
     "tabs": [
@@ -290,6 +298,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 20,
     "class_name": "Bloodmage",
     "tabs": [
@@ -330,6 +339,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 21,
     "class_name": "Ranger",
     "tabs": [
@@ -364,6 +374,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 22,
     "class_name": "Chronomancer",
     "tabs": [
@@ -404,6 +415,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 23,
     "class_name": "Necromancer",
     "tabs": [
@@ -438,6 +450,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 24,
     "class_name": "Pyromancer",
     "tabs": [
@@ -478,6 +491,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 25,
     "class_name": "Cultist",
     "tabs": [
@@ -518,6 +532,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 26,
     "class_name": "Starcaller",
     "tabs": [
@@ -558,6 +573,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 27,
     "class_name": "Sun Cleric",
     "tabs": [
@@ -604,6 +620,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 28,
     "class_name": "Tinker",
     "tabs": [
@@ -638,6 +655,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 31,
     "class_name": "Primalist",
     "tabs": [
@@ -678,6 +696,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 30,
     "class_name": "Reaper",
     "tabs": [
@@ -712,6 +731,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 29,
     "class_name": "Venomancer",
     "tabs": [
@@ -752,6 +772,7 @@
     }
   },
   {
+    "schema_version": "coa-normalized-v1",
     "class_id": 32,
     "class_name": "Runemaster",
     "tabs": [

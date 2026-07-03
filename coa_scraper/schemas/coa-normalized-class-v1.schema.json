@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.coa-meta/schemas/coa-normalized-class-v1.schema.json",
+  "title": "CoA Normalized Class v1",
+  "type": "object",
+  "required": ["schema_version", "class_id", "class_name", "tabs", "essence_caps"],
+  "properties": {
+    "schema_version": { "const": "coa-normalized-v1" },
+    "class_id": { "type": "number" },
+    "class_name": { "type": "string", "minLength": 1 },
+    "tabs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tab_id", "tab_name", "sort_order", "nominal_essence_kind"],
+        "properties": {
+          "tab_id": { "type": "number" },
+          "tab_name": { "type": "string", "minLength": 1 },
+          "sort_order": { "type": ["number", "null"] },
+          "nominal_essence_kind": { "enum": ["ability", "talent"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "essence_caps": {
+      "type": ["object", "null"],
+      "properties": {
+        "maxTalentEssence": { "type": "number" },
+        "maxAbilityEssence": { "type": "number" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

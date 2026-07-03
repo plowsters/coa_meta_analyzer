@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.coa-meta/schemas/coa-artifact-manifest-v1.schema.json",
+  "title": "CoA Artifact Manifest v1",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "builder", "source", "scripts", "artifacts", "validation"],
+  "properties": {
+    "schema_version": { "const": "coa-artifact-manifest-v1" },
+    "generated_at": { "type": "string" },
+    "builder": {
+      "type": "object",
+      "required": ["id", "slug", "name", "max_level"],
+      "properties": {
+        "id": { "type": ["number", "null"] },
+        "slug": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "max_level": { "type": ["number", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "source": { "type": "object" },
+    "scripts": { "type": "array" },
+    "artifacts": { "type": "array" },
+    "validation": { "type": "object" }
+  },
+  "additionalProperties": true
+}

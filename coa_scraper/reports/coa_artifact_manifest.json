@@ -1,0 +1,185 @@
+{
+  "schema_version": "coa-artifact-manifest-v1",
+  "generated_at": "2026-07-03T18:39:21.202Z",
+  "builder": {
+    "id": 39,
+    "slug": "voljin-alpha",
+    "name": "Vol'Jin Alpha",
+    "max_level": 60
+  },
+  "source": {
+    "url": "https://ascension.gg/en/v2/coa-builder/voljin-alpha",
+    "snapshot": "data/snapshots/final-page-content.html",
+    "har": "data/coa.har"
+  },
+  "scripts": [
+    {
+      "path": "scrape-coa-network.mjs",
+      "bytes": 6037,
+      "sha256": "98374bcfb0231e3d15b5539dd68b6a5c565da698ac3cab6deed4c0d932d6ef2b"
+    },
+    {
+      "path": "scripts/extract-coa-builder-payload.mjs",
+      "bytes": 6256,
+      "sha256": "dc6a861e47d70febcd39a9d90aa7d49885e1936b9e8f1d1c10a6cef42e5ce0c0"
+    },
+    {
+      "path": "scripts/inspect-coa-payload-shape.mjs",
+      "bytes": 4868,
+      "sha256": "455432571bd24cfce82df77c224f30a3ee9c41a07194ad36c0b8177d42e4400e"
+    },
+    {
+      "path": "scripts/summarize-coa-payload.mjs",
+      "bytes": 1515,
+      "sha256": "97fa788c510efe86c8059e058d3f48c1bf48230c0ba96bb422875fb3ba53e61d"
+    },
+    {
+      "path": "scripts/export-coa-normalized.mjs",
+      "bytes": 17315,
+      "sha256": "c5d4a0266bf28bb848e82d423bfe23eb8db28fb024da073d96ee150f746d3b18"
+    },
+    {
+      "path": "scripts/build-class-profile-input.mjs",
+      "bytes": 3156,
+      "sha256": "3a791946499f51554edf8df7698327d96b36a40a1bc3c42dc79d65eb1e330ba3"
+    },
+    {
+      "path": "scripts/validate-normalized.mjs",
+      "bytes": 6045,
+      "sha256": "b07e58e611734be704e7c246669c837de9559cd4ca4fe71a287aa37e3122f844"
+    },
+    {
+      "path": "scripts/write-artifact-manifest.mjs",
+      "bytes": 3240,
+      "sha256": "84adac29021a9f2c911d716acd91bf047f1cda8e1ed10bbbd94eaa2185a24120"
+    },
+    {
+      "path": "scripts/run-normalization-pipeline.mjs",
+      "bytes": 1413,
+      "sha256": "7f23377da8a1b21735d915cbe982051b228df1b11c9bf31c8226067d067a32c5"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "data/coa.har",
+      "bytes": 14032138,
+      "sha256": "1e85cf1beaa82b32ef4a6a9065526158e2c8db014e54a8d60d42010c3bc9da44"
+    },
+    {
+      "path": "data/snapshots/final-page-content.html",
+      "bytes": 11997516,
+      "sha256": "32edcc1125d96485c3b60aba97d508f4b7689f7552c5c4ccbc0ec8c97df0ceca"
+    },
+    {
+      "path": "data/snapshots/final-runtime-dump.json",
+      "bytes": 1184,
+      "sha256": "937abc1e21d5bf3a6f693a51ea8b38f09c1248181dc23d978a555e4e9c6c88b4"
+    },
+    {
+      "path": "reports/next_flight_stream.txt",
+      "bytes": 9198738,
+      "sha256": "252c59f7b95bb03b1bb195b68abf66704cb204d26ecb79842bc17b3b8afe9c75"
+    },
+    {
+      "path": "reports/coa_builder_payload.json",
+      "bytes": 6828948,
+      "sha256": "abbf2dd3c8e340e8a584a29b6b761118208dc2fa4789edf012001a381a557c7e"
+    },
+    {
+      "path": "reports/coa_builder_summary.json",
+      "bytes": 12450,
+      "sha256": "fb7d1b553fd390125f93f185276b199e90a5ae608c826f56e3f01d934eb9e202"
+    },
+    {
+      "path": "reports/coa_payload_shape.json",
+      "bytes": 1163209,
+      "sha256": "42f78ed97109434c7feb0b2f9f3a106cb9a8a16998e95a3ce378e89b055fcaf7"
+    },
+    {
+      "path": "reports/coa_payload_shape_report.txt",
+      "bytes": 406343,
+      "sha256": "f8d7e39f2f13442146d76cb492238af28be243d2e3bbcd210e66560de676e35a"
+    },
+    {
+      "path": "reports/coa_payload_report.txt",
+      "bytes": 2413,
+      "sha256": "b6ea276de4aa4913dadf3c0883d713c2392828712a118d17e324f9be6c596fa2"
+    },
+    {
+      "path": "reports/coa_normalization_report.txt",
+      "bytes": 2897,
+      "sha256": "b9184e5922041fbb5490a83100668549a5b321ee5e6965e8d617cf3c634c6978"
+    },
+    {
+      "path": "reports/coa_counts_by_class_tab_kind.txt",
+      "bytes": 94452,
+      "sha256": "7849f4c85a205e9e4b716001272f5ce98b69132211ede124e885b3bbe4198d45"
+    },
+    {
+      "path": "reports/coa_validation_summary.json",
+      "bytes": 639,
+      "sha256": "93e5d756fd6c68a8fb0adc9ec8ed792593abaad2413cb0b7b4b7772c1f637eb2"
+    },
+    {
+      "path": "dist/coa_entries.jsonl",
+      "bytes": 12924838,
+      "sha256": "e80ea3b29122838c70ba651591448773d1372f0755b1a3de4f0c324aa325c5ca"
+    },
+    {
+      "path": "dist/coa_entries.pretty.json",
+      "bytes": 16790509,
+      "sha256": "598a5f9c767e5773189c4187a534f79936742feb94cb22b8b49c9e8f89416dee"
+    },
+    {
+      "path": "dist/coa_classes.json",
+      "bytes": 17543,
+      "sha256": "24df3800d805b3f06f29f715c7803ef3fb412f24852f7c38b23e01f1d9c36d1b"
+    },
+    {
+      "path": "dist/coa_essence_caps.json",
+      "bytes": 1493,
+      "sha256": "940fb28124766a8239c41df8ece4c9b65260c5862c65c3cf0c9b641cba9efd76"
+    },
+    {
+      "path": "dist/coa_class_profile_input.json",
+      "bytes": 3017462,
+      "sha256": "8b14a4cc79e3c5b6335b070b31c4ba5731bb8e37b3dc6f60419093f18cdc08f2"
+    }
+  ],
+  "validation": {
+    "schema_version": "coa-validation-summary-v1",
+    "status": "pass",
+    "class_count": 21,
+    "record_count": 3612,
+    "class_names": [
+      "Barbarian",
+      "Bloodmage",
+      "Chronomancer",
+      "Cultist",
+      "Felsworn",
+      "Guardian",
+      "Knight of Xoroth",
+      "Necromancer",
+      "Primalist",
+      "Pyromancer",
+      "Ranger",
+      "Reaper",
+      "Runemaster",
+      "Starcaller",
+      "Stormbringer",
+      "Sun Cleric",
+      "Templar",
+      "Tinker",
+      "Venomancer",
+      "Witch Doctor",
+      "Witch Hunter"
+    ],
+    "missing_class_records": 0,
+    "missing_tab_records": 0,
+    "unknown_essence_kind_records": 0,
+    "failures": [],
+    "warnings": []
+  },
+  "dist_dir": "dist",
+  "reports_dir": "reports"
+}
