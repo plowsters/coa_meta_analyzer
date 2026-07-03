@@ -180,6 +180,14 @@ Target package:
 
 - `coa_meta/builds/`
 
+M1.3 implementation files:
+
+- `coa_meta/domain.py`
+- `coa_meta/repository.py`
+- `coa_meta/builds.py`
+- `coa_meta/search.py`
+- `coa_meta/explain.py`
+
 Responsibilities:
 
 - Validate selected builds.
@@ -433,4 +441,3 @@ Outputs:
 Non-responsibilities:
 
 - Owning legality, scoring, or simulation logic.
-
