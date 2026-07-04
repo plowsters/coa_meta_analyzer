@@ -12,6 +12,7 @@ import {
   writeJson
 } from "../scripts/lib/artifacts.mjs";
 import {
+  buildEnrichmentRows,
   extractLinkedIds,
   parsePowerPayload,
   stripTooltipHtml
@@ -261,4 +262,29 @@ test("tooltip utilities strip HTML and extract linked ids", () => {
   assert.equal(stripTooltipHtml(html), "Requires Level 20 Spell Item");
   assert.deepEqual(extractLinkedIds(html, "spell"), [100]);
   assert.deepEqual(extractLinkedIds(html, "item"), [200]);
+});
+
+test("DB enrichment rows use fetch results and classify name differences", async () => {
+  const entries = [
+    validNode({ entry_id: 1, spell_id: 92117, name: "Dream Flowers" }),
+    validNode({ entry_id: 2, spell_id: 804137, name: "Headhunter's Spear" })
+  ];
+  const responses = new Map([
+    [92117, SPELL_POWER_FIXTURE],
+    [804137, EMPTY_SPELL_POWER_FIXTURE]
+  ]);
+  const fetchPower = async ({ id }) => responses.get(id);
+
+  const rows = await buildEnrichmentRows({
+    entries,
+    kind: "spell",
+    fetchPower,
+    fetchedAt: "2026-07-04T00:00:00.000Z"
+  });
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].status, "matched");
+  assert.equal(rows[0].name_match, true);
+  assert.equal(rows[1].status, "empty_registration");
+  assert.equal(rows[1].name_match, false);
 });

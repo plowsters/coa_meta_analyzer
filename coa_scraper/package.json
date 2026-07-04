@@ -9,6 +9,8 @@
     "normalize": "node scripts/export-coa-normalized.mjs reports/coa_builder_payload.json dist",
     "validate": "node scripts/validate-normalized.mjs dist reports",
     "pipeline": "node scripts/run-normalization-pipeline.mjs",
+    "enrich-db": "node scripts/enrich-ascensiondb.mjs dist/coa_entries.jsonl dist reports",
+    "pipeline:m1.8": "npm run pipeline && npm run enrich-db",
     "unit-test": "node --test tests/*.test.mjs",
     "test": "npm run unit-test && npm run validate"
   },

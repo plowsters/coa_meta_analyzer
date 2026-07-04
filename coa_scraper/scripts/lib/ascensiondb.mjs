@@ -135,3 +135,79 @@ export function writeJsonl(filePath, rows) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`);
 }
+
+export function normalizeName(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+export function uniqueSpellIds(entries) {
+  return [
+    ...new Set(entries.map(entry => Number(entry.spell_id)).filter(Number.isFinite))
+  ].sort((a, b) => a - b);
+}
+
+function uniqueItemIds(entries) {
+  return [
+    ...new Set(entries.map(entry => Number(entry.item_id)).filter(Number.isFinite))
+  ].sort((a, b) => a - b);
+}
+
+export async function buildEnrichmentRows({
+  entries,
+  kind,
+  fetchPower,
+  fetchedAt = new Date().toISOString()
+}) {
+  const idField = kind === "spell" ? "spell_id" : "item_id";
+  const ids = kind === "spell" ? uniqueSpellIds(entries) : uniqueItemIds(entries);
+  const byId = new Map(entries.map(entry => [Number(entry[idField]), entry]));
+  const rows = [];
+
+  for (const id of ids) {
+    const url = powerUrl(kind, id);
+    let parsed;
+
+    try {
+      const payload = await fetchPower({ kind, id, url });
+      parsed = parsePowerPayload(payload, { kind, id, url, fetchedAt });
+    } catch (error) {
+      parsed = {
+        kind,
+        id,
+        status: "fetch_failed",
+        name: null,
+        icon: null,
+        tooltip_html: "",
+        tooltip_text: "",
+        tooltip_level: null,
+        required_level: null,
+        linked_spell_ids: [],
+        linked_item_ids: [],
+        raw: String(error.message || error),
+        provenance: { url, fetched_at: fetchedAt }
+      };
+    }
+
+    const entry = byId.get(id);
+    const nameMatch = Boolean(
+      parsed.name && entry && normalizeName(parsed.name) === normalizeName(entry.name)
+    );
+
+    rows.push({
+      ...parsed,
+      entry_id: entry?.entry_id ?? null,
+      builder_name: entry?.name ?? null,
+      name_match: nameMatch
+    });
+  }
+
+  return rows;
+}
+
+export async function fetchText(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} for ${url}`);
+  }
+  return response.text();
+}
