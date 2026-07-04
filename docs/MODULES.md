@@ -84,6 +84,7 @@ Responsibilities:
 - Convert raw builder records into normalized, versioned domain records.
 - Preserve raw source records.
 - Infer secondary features such as tags, damage schools, resources, and text-derived hints.
+- Join builder records with optional AscensionDB tooltip enrichment while preserving builder legality as the source of truth.
 - Emit validation reports.
 
 Inputs:
@@ -96,6 +97,10 @@ Outputs:
 - `coa_entries.pretty.json`
 - `coa_classes.json`
 - `coa_essence_caps.json`
+- `coa_db_spell_tooltips.jsonl`
+- `coa_db_enrichment_summary.json`
+- `coa_source_level_report.json`
+- `coa_metadata_tab_report.json`
 - normalization report
 - class profile input summary
 

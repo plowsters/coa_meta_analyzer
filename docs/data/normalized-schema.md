@@ -31,6 +31,17 @@ Required groups:
 
 The optimizer should treat `raw` as audit data and should prefer normalized fields unless debugging extraction drift.
 
+## M1.8 Source and Level Fields
+
+M1.8 keeps `coa-normalized-v1` and adds optional source-aware fields:
+
+- `source_category`: `spec_tree`, `class_pool`, `trainer`, `misc_system`, `metadata_only`, or `unknown`.
+- `source_confidence`: `high`, `medium`, or `low`.
+- `availability`: builder, tooltip, DB tooltip, effective level, confidence, source, and notes.
+- `db_enrichment`: optional AscensionDB spell tooltip join data.
+
+Consumers must continue to support records without these fields. When present, `availability.effective_required_level` may be used for lower-level eligibility only if `availability.level_confidence` is `high` or `medium`.
+
 ## Validation
 
 Run:

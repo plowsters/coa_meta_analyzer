@@ -149,3 +149,15 @@ Status: accepted.
 - `Class` is a shared class pool included in each spec's legal node set.
 - `None` and metadata-only tabs are not standalone report rows.
 - Lower-level runs filter known `required_level` data and warn when class/trainer source data is incomplete.
+
+## Decision 15: AscensionDB Enriches But Does Not Replace Builder Legality
+
+Status: accepted.
+
+M1.8 treats the CoA builder payload as authoritative for class/tab ownership, graph structure, prerequisites, AE/TE costs, and tab gates. AscensionDB is the preferred source for spell and item tooltip enrichment, buff/effect text, equipment text, linked spell/item IDs, and tooltip-level evidence.
+
+Reasoning:
+
+- The builder payload carries active builder graph data that DB pages do not expose as a coherent build graph.
+- AscensionDB exposes richer spell and item tooltip payloads through `&power` endpoints.
+- DB records can be missing, empty, permission-restricted, or named differently from builder nodes, so enrichment needs confidence and coverage rather than blind overwrites.

@@ -43,3 +43,14 @@ python -m coa_meta meta --class "Sun Cleric" --spec Blessings --level 60 --out r
 ```
 
 The report emits projected theorycraft indexes. It does not emit observed DPS, simulated DPS, or empirical rankings.
+
+## Optional M1.8 DB Enrichment
+
+The default Phase 1 report path remains network-free after artifacts exist. To refresh source and level enrichment from AscensionDB, run:
+
+```bash
+cd coa_scraper
+npm run pipeline:m1.8
+```
+
+This writes DB tooltip artifacts and an enriched entries file. AscensionDB enrichment is used for provenance and lower-level confidence; it does not replace builder legality fields.
