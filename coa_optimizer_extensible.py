@@ -62,6 +62,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Literal, Protocol
 
+from coa_meta.apl import apl_to_simc_lines, generate_apl
+from coa_meta.apl_profiles import load_apl_profile_by_role
+from coa_meta.builds import BuildConfig as PackageBuildConfig
+from coa_meta.builds import BuildRules as PackageBuildRules
+from coa_meta.domain import SelectedRank as PackageSelectedRank
+from coa_meta.repository import TalentRepository as PackageTalentRepository
+
 EncounterType = Literal["single_target", "aoe", "cleave", "solo"]
 
 
@@ -726,6 +733,33 @@ def dedupe_apl(rules: list[APLRule]) -> list[APLRule]:
     return out
 
 
+def generate_compat_rotation_lines(
+    entries_path: Path,
+    class_name: str,
+    profile_name: str,
+    encounter: str,
+    selected_names: list[str],
+    role: str = "dps",
+) -> list[str]:
+    package_repo = PackageTalentRepository.from_entries(entries_path)
+    selected_ids: list[int] = []
+    for name in selected_names:
+        selected_ids.append(package_repo.node_by_name(class_name, name).entry_id)
+    package_rules = PackageBuildRules(
+        package_repo,
+        PackageBuildConfig(class_name=class_name, level=60, max_ae=99, max_te=99),
+    )
+    validation = package_rules.validate([PackageSelectedRank(node_id, 1) for node_id in selected_ids])
+    if not validation.valid or validation.state is None:
+        raise SystemExit(f"selected rotation nodes are not legal: {validation.issue_codes()}")
+
+    spec_key = "stalker" if profile_name == "stalker" else profile_name
+    apl_profile, warnings = load_apl_profile_by_role(class_name=class_name, spec_key=spec_key, role=role)
+    apl_encounter = "aoe_5" if encounter in {"aoe", "aoe_5", "cleave"} else "single_target"
+    document = generate_apl(validation.state, package_repo, apl_profile, encounter=apl_encounter, profile_warnings=warnings)
+    return apl_to_simc_lines(document)
+
+
 # -----------------------------
 # Combat log / addon adapters
 # -----------------------------
@@ -1059,9 +1093,15 @@ def command_optimize(args: argparse.Namespace) -> None:
             item = explain_state(st, nodes, scorer)
             item["score"] = round(score, 2)
             item["state_notes"] = notes
-            selected = [nodes[i] for i in st.selected if i in nodes]
-            rot = make_rotation_strategy(args.class_name, args.profile, args.encounter).generate(selected)
-            item["rotation_apl"] = [r.simc_like() for r in rot]
+            selected_names = [nodes[i].name for i in st.selected if i in nodes]
+            item["rotation_apl"] = generate_compat_rotation_lines(
+                entries_path=args.entries,
+                class_name=args.class_name,
+                profile_name=args.profile,
+                encounter=args.encounter,
+                selected_names=selected_names,
+                role="dps",
+            )
             out.append(item)
         print(json.dumps(out, indent=2))
         return
@@ -1080,32 +1120,46 @@ def command_optimize(args: argparse.Namespace) -> None:
             for note in notes[:16]:
                 print(f"  {note}")
         if args.show_rotation:
-            selected = [nodes[i] for i in st.selected if i in nodes]
-            rot = make_rotation_strategy(args.class_name, args.profile, args.encounter).generate(selected)
+            selected_names = [nodes[i].name for i in st.selected if i in nodes]
+            rotation_lines = generate_compat_rotation_lines(
+                entries_path=args.entries,
+                class_name=args.class_name,
+                profile_name=args.profile,
+                encounter=args.encounter,
+                selected_names=selected_names,
+                role="dps",
+            )
             print("\nRotation scaffold:")
-            for r in rot:
-                print("  " + r.simc_like())
+            for line in rotation_lines:
+                print("  " + line)
 
 
 def command_rotation(args: argparse.Namespace) -> None:
     repo = TalentRepository(args.entries)
     nodes = repo.by_class(args.class_name)
-    selected = selected_by_names(nodes, args.selected_names)
-    if not selected and args.from_build_json:
+    selected_names = args.selected_names
+    if not selected_names and args.from_build_json:
         payload = json.loads(args.from_build_json.read_text(encoding="utf-8"))
-        ids = set()
         if isinstance(payload, list) and payload:
             payload = payload[0]
-        for tab_nodes in (payload.get("paid_by_tab") or {}).values():
-            for item in tab_nodes:
-                ids.add(as_int(item.get("id")))
-        selected = [nodes[i] for i in ids if i in nodes]
-    if not selected:
+        selected_names = [
+            item["name"]
+            for tab_nodes in (payload.get("paid_by_tab") or {}).values()
+            for item in tab_nodes
+            if item.get("name")
+        ]
+    if not selected_names:
         # Use all nodes as a rough class rotation catalog.
-        selected = list(nodes.values())
-    strategy = make_rotation_strategy(args.class_name, args.profile, args.encounter)
-    for rule in strategy.generate(selected):
-        print(rule.simc_like())
+        selected_names = [node.name for node in nodes.values() if not node.is_passive]
+    for line in generate_compat_rotation_lines(
+        entries_path=args.entries,
+        class_name=args.class_name,
+        profile_name=args.profile,
+        encounter=args.encounter,
+        selected_names=selected_names,
+        role="dps",
+    ):
+        print(line)
 
 
 def command_parse_log(args: argparse.Namespace) -> None:
