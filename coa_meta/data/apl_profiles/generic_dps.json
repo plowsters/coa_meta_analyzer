@@ -1,0 +1,91 @@
+{
+  "schema_version": "coa-apl-profile-v1",
+  "profile_id": "generic_dps",
+  "class_name": "*",
+  "spec_key": "*",
+  "role": "dps",
+  "supported_encounters": ["single_target", "aoe_5"],
+  "resources": [{"name": "Energy", "aliases": ["energy"], "default_pool": null}],
+  "thresholds": {"spender": 80, "execute_health_pct": 35, "aoe_min_enemies": 3},
+  "condition_templates": {
+    "always": "",
+    "maintain_dot": "dot.{action_key}.remains<gcd",
+    "cooldown_ready": "cooldown.{action_key}.ready",
+    "spender_ready": "{primary_resource}>={spender_threshold}",
+    "builder_ready": "{primary_resource}.deficit>0",
+    "execute": "target.health.pct<{execute_health_pct}",
+    "aoe": "active_enemies>={aoe_min_enemies}"
+  },
+  "rules": [
+    {
+      "id": "maintain_dots",
+      "category": "maintenance",
+      "match": {"tags_any": ["dot"], "active_only": true},
+      "condition_template": "maintain_dot",
+      "priority": 20,
+      "confidence": "medium",
+      "note": "maintain DoT/debuff uptime"
+    },
+    {
+      "id": "use_cooldowns",
+      "category": "cooldown",
+      "match": {"tags_any": ["cooldown", "resource_management"], "active_only": true},
+      "condition_template": "cooldown_ready",
+      "priority": 40,
+      "confidence": "medium",
+      "note": "use selected cooldowns when ready"
+    },
+    {
+      "id": "execute_actions",
+      "category": "execute",
+      "match": {"tags_any": ["execute"], "active_only": true},
+      "condition_template": "execute",
+      "priority": 50,
+      "confidence": "medium",
+      "note": "execute window action"
+    },
+    {
+      "id": "aoe_text_actions",
+      "category": "aoe",
+      "match": {"description_matches_any": ["nearby enemies", "all enemies", "up to [0-9]+ enemies"], "active_only": true},
+      "condition_template": "aoe",
+      "priority": 60,
+      "confidence": "low",
+      "note": "AoE condition inferred from tooltip text"
+    },
+    {
+      "id": "spenders",
+      "category": "spender",
+      "match": {"tags_any": ["spender"], "active_only": true},
+      "condition_template": "spender_ready",
+      "priority": 70,
+      "confidence": "medium",
+      "note": "spend at profile threshold"
+    },
+    {
+      "id": "builders",
+      "category": "builder",
+      "match": {"tags_any": ["builder"], "active_only": true},
+      "condition_template": "builder_ready",
+      "priority": 80,
+      "confidence": "medium",
+      "note": "build primary resource"
+    },
+    {
+      "id": "active_filler",
+      "category": "filler",
+      "match": {"entry_type_in": ["Ability"], "active_only": true},
+      "condition_template": "always",
+      "priority": 200,
+      "confidence": "low",
+      "note": "fallback active ability"
+    }
+  ],
+  "branches": [
+    {"encounter": "single_target", "include_categories": ["maintenance", "cooldown", "execute", "spender", "builder", "filler"]},
+    {"encounter": "aoe_5", "include_categories": ["maintenance", "cooldown", "execute", "aoe", "spender", "builder", "filler"]}
+  ],
+  "assumptions": ["Generated from normalized builder data and static DPS APL profile rules."],
+  "future_inputs": ["combat_log_metrics", "saved_variables_snapshot", "sim_state"],
+  "confidence": {"base": "medium"}
+}

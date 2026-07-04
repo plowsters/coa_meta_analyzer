@@ -1,0 +1,52 @@
+{
+  "schema_version": "coa-apl-profile-v1",
+  "profile_id": "generic_healer_support",
+  "class_name": "*",
+  "spec_key": "*",
+  "role": "healer_support",
+  "supported_encounters": ["single_target", "aoe_5"],
+  "resources": [{"name": "Mana", "aliases": ["mana"], "default_pool": null}],
+  "thresholds": {"spender": 70, "execute_health_pct": 35, "aoe_min_enemies": 3},
+  "condition_templates": {
+    "always": "",
+    "maintain_hot": "hot.{action_key}.remains<gcd",
+    "cooldown_ready": "cooldown.{action_key}.ready",
+    "builder_ready": "{primary_resource}.deficit>0"
+  },
+  "rules": [
+    {
+      "id": "maintain_hots",
+      "category": "maintenance",
+      "match": {"tags_any": ["hot"], "active_only": true},
+      "condition_template": "maintain_hot",
+      "priority": 20,
+      "confidence": "medium",
+      "note": "maintain healing over time effect"
+    },
+    {
+      "id": "support_cooldowns",
+      "category": "cooldown",
+      "match": {"tags_any": ["heal", "cooldown", "aura"], "active_only": true},
+      "condition_template": "cooldown_ready",
+      "priority": 40,
+      "confidence": "medium",
+      "note": "use support cooldowns when ready"
+    },
+    {
+      "id": "resource_builders",
+      "category": "builder",
+      "match": {"tags_any": ["builder", "resource_management"], "active_only": true},
+      "condition_template": "builder_ready",
+      "priority": 80,
+      "confidence": "medium",
+      "note": "recover or build resource"
+    }
+  ],
+  "branches": [
+    {"encounter": "single_target", "include_categories": ["maintenance", "cooldown", "builder"]},
+    {"encounter": "aoe_5", "include_categories": ["maintenance", "cooldown", "builder"]}
+  ],
+  "assumptions": ["Generated from normalized builder data and static healer/support APL profile rules."],
+  "future_inputs": ["combat_log_metrics", "saved_variables_snapshot", "sim_state"],
+  "confidence": {"base": "medium"}
+}
