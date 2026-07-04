@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coa-meta-analyzer"
+version = "0.1.0"
+description = "Ascension Conquest of Azeroth Phase 1 theorycraft meta analyzer"
+readme = "docs/README.md"
+requires-python = ">=3.11"
+authors = [
+  {name = "CoA Meta Analyzer contributors"}
+]
+dependencies = []
+
+[project.scripts]
+coa-meta = "coa_meta.cli:main"
+
+[tool.setuptools]
+packages = ["coa_meta"]
+
+[tool.setuptools.package-data]
+coa_meta = [
+  "data/scoring_profiles/*.json",
+  "data/apl_profiles/*.json"
+]
