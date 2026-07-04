@@ -12,13 +12,19 @@ class BuildConfig:
     level: int = 60
     max_ae: int = 26
     max_te: int = 25
+    allowed_node_ids: tuple[int, ...] | None = None
 
 
 class BuildRules:
     def __init__(self, repository: TalentRepository, config: BuildConfig):
         self.repository = repository
         self.config = config
-        self.nodes = {node.entry_id: node for node in repository.nodes_for_class(config.class_name)}
+        allowed = set(config.allowed_node_ids) if config.allowed_node_ids is not None else None
+        self.nodes = {
+            node.entry_id: node
+            for node in repository.nodes_for_class(config.class_name)
+            if allowed is None or node.entry_id in allowed
+        }
 
     def initial_state(self) -> BuildState:
         selected: set[int] = set()
@@ -65,6 +71,15 @@ class BuildRules:
                 continue
             if node.class_name != self.config.class_name:
                 issues.append(ValidationIssue("wrong_class", f"{node.name} belongs to {node.class_name}", node_id))
+                continue
+            if node.entry_id not in self.nodes:
+                issues.append(
+                    ValidationIssue(
+                        "node_not_in_scope",
+                        f"{node.name} is not available in this build scope",
+                        node_id,
+                    )
+                )
                 continue
             if rank < 1:
                 issues.append(
