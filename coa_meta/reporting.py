@@ -451,3 +451,110 @@ def _class_summaries(spec_results: tuple[SpecResult, ...]) -> tuple[dict[str, An
             }
         )
     return tuple(summaries)
+
+
+def render_markdown_report(report: MetaReport) -> str:
+    data = report.to_dict()
+    lines = [
+        "# CoA Phase 1 Meta Report",
+        "",
+        "This report is a theorycraft projection. Projected DPS Index is not observed DPS.",
+        "",
+        "## Run",
+        "",
+        f"- Generated: `{data['generated_at']}`",
+        f"- Schema: `{data['schema_version']}`",
+        f"- Level: `{data['run_config']['level']}`",
+        "",
+    ]
+    if data["warnings"]:
+        lines.extend(["## Warnings", ""])
+        lines.extend(f"- `{warning}`" for warning in data["warnings"])
+        lines.append("")
+    lines.extend(["## Spec Results", ""])
+    for result in data["spec_results"]:
+        lines.append(f"### {result['class_name']} - {result['spec_name']}")
+        if result["warnings"]:
+            lines.extend(f"- Warning: `{warning}`" for warning in result["warnings"])
+        lines.append("")
+        lines.append("| Rank | Projected DPS Index | Confidence | Selected Nodes |")
+        lines.append("| --- | ---: | --- | --- |")
+        for build in result["top_builds"]:
+            nodes = ", ".join(node["name"] for node in build["selected_nodes"])
+            lines.append(
+                f"| {build['rank']} | {build['projected_dps_index']} | {build['confidence_label']} | {nodes} |"
+            )
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_html_report(report: MetaReport, asset_resolver: Any | None = None) -> str:
+    data = report.to_dict()
+    warning_items = "".join(f"<li><code>{_html_escape(warning)}</code></li>" for warning in data["warnings"])
+    sections: list[str] = []
+    for result in data["spec_results"]:
+        rows: list[str] = []
+        for build in result["top_builds"]:
+            nodes = ", ".join(_html_escape(node["name"]) for node in build["selected_nodes"])
+            rows.append(
+                "<tr>"
+                f"<td>{build['rank']}</td>"
+                f"<td>{build['projected_dps_index']}</td>"
+                f"<td>{_html_escape(build['confidence_label'])}</td>"
+                f"<td>{nodes}</td>"
+                "</tr>"
+            )
+        sections.append(
+            "<section>"
+            f"<h2>{_html_escape(result['class_name'])} - {_html_escape(result['spec_name'])}</h2>"
+            "<table><thead><tr><th>Rank</th><th>Projected DPS Index</th><th>Confidence</th><th>Selected Nodes</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>"
+            "</section>"
+        )
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<title>CoA Phase 1 Meta Report</title>"
+        "<style>body{font-family:system-ui,sans-serif;margin:24px;}table{border-collapse:collapse;width:100%;margin-bottom:24px;}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;}th{background:#f4f4f4;}code{background:#eee;padding:1px 4px;}</style>"
+        "</head><body>"
+        "<h1>CoA Phase 1 Meta Report</h1>"
+        "<p>This report is a theorycraft projection. Projected DPS Index is not observed DPS.</p>"
+        f"<h2>Warnings</h2><ul>{warning_items}</ul>"
+        f"{''.join(sections)}"
+        "</body></html>"
+    )
+
+
+def write_report_outputs(
+    report: MetaReport,
+    out_dir: Path | str,
+    formats: tuple[str, ...] = ("json", "md", "html"),
+    asset_resolver: Any | None = None,
+) -> tuple[Path, ...]:
+    output_dir = Path(out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for fmt in formats:
+        if fmt == "json":
+            path = output_dir / "meta-report.json"
+            path.write_text(json.dumps(report.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        elif fmt == "md":
+            path = output_dir / "meta-report.md"
+            path.write_text(render_markdown_report(report), encoding="utf-8")
+        elif fmt == "html":
+            path = output_dir / "meta-report.html"
+            path.write_text(render_html_report(report, asset_resolver=asset_resolver), encoding="utf-8")
+        else:
+            raise ValueError(f"Unsupported report format {fmt}")
+        written.append(path)
+    return tuple(written)
+
+
+def _html_escape(value: Any) -> str:
+    text = str(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
