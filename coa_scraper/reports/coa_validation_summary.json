@@ -29,6 +29,8 @@
   "missing_class_records": 0,
   "missing_tab_records": 0,
   "unknown_essence_kind_records": 0,
+  "m1_8_source_records": 3612,
+  "m1_8_availability_records": 3612,
   "failures": [],
   "warnings": []
 }

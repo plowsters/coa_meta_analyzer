@@ -50,6 +50,8 @@ export function validateNormalizedArtifacts({
   let missingClassRecords = 0;
   let missingTabRecords = 0;
   let unknownEssenceKindRecords = 0;
+  let m18SourceRecords = 0;
+  let m18AvailabilityRecords = 0;
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
@@ -75,6 +77,25 @@ export function validateNormalizedArtifacts({
     if (!e.field_sources || typeof e.field_sources !== "object") fail(`${label} missing field_sources object`);
     if (!e.inferred || typeof e.inferred !== "object") fail(`${label} missing inferred object`);
     if (!e.raw || typeof e.raw !== "object") fail(`${label} missing raw object`);
+    if (e.source_category !== undefined) {
+      m18SourceRecords++;
+      if (!["spec_tree", "class_pool", "trainer", "misc_system", "metadata_only", "unknown"].includes(e.source_category)) {
+        fail(`${label} invalid source_category ${e.source_category}`);
+      }
+    }
+    if (e.availability !== undefined) {
+      m18AvailabilityRecords++;
+      if (typeof e.availability !== "object" || e.availability === null) {
+        fail(`${label} availability must be object`);
+      } else {
+        if (typeof e.availability.effective_required_level !== "number") {
+          fail(`${label} availability.effective_required_level is not numeric`);
+        }
+        if (!["high", "medium", "low"].includes(e.availability.level_confidence)) {
+          fail(`${label} invalid availability.level_confidence ${e.availability.level_confidence}`);
+        }
+      }
+    }
   }
 
   if (missingClassRecords > 0) fail(`missing class records: ${missingClassRecords}`);
@@ -104,6 +125,8 @@ export function validateNormalizedArtifacts({
     missing_class_records: missingClassRecords,
     missing_tab_records: missingTabRecords,
     unknown_essence_kind_records: unknownEssenceKindRecords,
+    m1_8_source_records: m18SourceRecords,
+    m1_8_availability_records: m18AvailabilityRecords,
     failures,
     warnings
   };

@@ -13,6 +13,11 @@ const scriptPaths = [
   "scripts/summarize-coa-payload.mjs",
   "scripts/export-coa-normalized.mjs",
   "scripts/build-class-profile-input.mjs",
+  "scripts/lib/ascensiondb.mjs",
+  "scripts/lib/source-level.mjs",
+  "scripts/enrich-ascensiondb.mjs",
+  "scripts/apply-db-enrichment.mjs",
+  "scripts/write-source-level-report.mjs",
   "scripts/validate-normalized.mjs",
   "scripts/write-artifact-manifest.mjs",
   "scripts/run-normalization-pipeline.mjs"
@@ -31,11 +36,16 @@ const artifactPaths = [
   "reports/coa_normalization_report.txt",
   "reports/coa_counts_by_class_tab_kind.txt",
   "reports/coa_validation_summary.json",
+  "reports/coa_source_level_report.json",
+  "reports/coa_metadata_tab_report.json",
+  "reports/coa_db_enrichment_summary.json",
   "dist/coa_entries.jsonl",
   "dist/coa_entries.pretty.json",
   "dist/coa_classes.json",
   "dist/coa_essence_caps.json",
-  "dist/coa_class_profile_input.json"
+  "dist/coa_class_profile_input.json",
+  "dist/coa_db_spell_tooltips.jsonl",
+  "dist/coa_entries.enriched.jsonl"
 ];
 
 function optionalRecord(relativePath, rootDir) {

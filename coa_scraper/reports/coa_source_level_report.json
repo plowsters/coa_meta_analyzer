@@ -1,0 +1,403 @@
+{
+  "schema_version": "coa-source-level-report-v1",
+  "record_count": 3612,
+  "metadata_tab_count": 96,
+  "metadata_tabs_without_nodes": [
+    {
+      "class_name": "Witch Hunter",
+      "tab_id": 1,
+      "tab_name": "None",
+      "sort_order": 0,
+      "nominal_essence_kind": "talent",
+      "has_nodes": false
+    },
+    {
+      "class_name": "Guardian",
+      "tab_id": 1,
+      "tab_name": "None",
+      "sort_order": 0,
+      "nominal_essence_kind": "talent",
+      "has_nodes": false
+    },
+    {
+      "class_name": "Chronomancer",
+      "tab_id": 71,
+      "tab_name": "Blessings",
+      "sort_order": 0,
+      "nominal_essence_kind": "talent",
+      "has_nodes": false
+    },
+    {
+      "class_name": "Pyromancer",
+      "tab_id": 1,
+      "tab_name": "None",
+      "sort_order": 0,
+      "nominal_essence_kind": "talent",
+      "has_nodes": false
+    },
+    {
+      "class_name": "Sun Cleric",
+      "tab_id": 1,
+      "tab_name": "None",
+      "sort_order": 0,
+      "nominal_essence_kind": "talent",
+      "has_nodes": false
+    }
+  ],
+  "required_level_zero_with_tooltip_level_count": 42,
+  "required_level_zero_with_tooltip_level_samples": [
+    {
+      "class_name": "Ranger",
+      "tab_name": "Farstrider",
+      "entry_id": 4030,
+      "spell_id": 92117,
+      "name": "Dream Flowers",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Barbarian",
+      "tab_name": "Headhunting",
+      "entry_id": 4002,
+      "spell_id": 92082,
+      "name": "Headhunter",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Barbarian",
+      "tab_name": "Ancestry",
+      "entry_id": 4003,
+      "spell_id": 92083,
+      "name": "Fill Level",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Doctor",
+      "tab_name": "Voodoo",
+      "entry_id": 4004,
+      "spell_id": 92084,
+      "name": "Puppeteer's Threads",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Doctor",
+      "tab_name": "Brewing",
+      "entry_id": 4005,
+      "spell_id": 92085,
+      "name": "Cauldron Brewer",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Doctor",
+      "tab_name": "Shadowhunting",
+      "entry_id": 4006,
+      "spell_id": 92086,
+      "name": "Shadowhunter",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Felsworn",
+      "tab_name": "Tyrant",
+      "entry_id": 4009,
+      "spell_id": 92089,
+      "name": "Burning Commander",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Felsworn",
+      "tab_name": "Slayer",
+      "entry_id": 4007,
+      "spell_id": 92087,
+      "name": "Dancing Blades",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Felsworn",
+      "tab_name": "Infernal",
+      "entry_id": 4008,
+      "spell_id": 92088,
+      "name": "Fel Apprentice",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Hunter",
+      "tab_name": "Boltslinger",
+      "entry_id": 4010,
+      "spell_id": 92091,
+      "name": "Boltslinger",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Hunter",
+      "tab_name": "Houndmaster",
+      "entry_id": 4011,
+      "spell_id": 92093,
+      "name": "Houndmaster",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Hunter",
+      "tab_name": "Inquisition",
+      "entry_id": 4012,
+      "spell_id": 92094,
+      "name": "Flames of Sin",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Witch Hunter",
+      "tab_name": "Black Knight",
+      "entry_id": 7553,
+      "spell_id": 707064,
+      "name": "Grasp of the Undying",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Knight of Xoroth",
+      "tab_name": "Hellfire",
+      "entry_id": 4017,
+      "spell_id": 92101,
+      "name": "Greater Imp",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Knight of Xoroth",
+      "tab_name": "Defiance",
+      "entry_id": 4018,
+      "spell_id": 92104,
+      "name": "Brimstone Buckler",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Templar",
+      "tab_name": "Zealot",
+      "entry_id": 4022,
+      "spell_id": 92108,
+      "name": "Zealotry",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Bloodmage",
+      "tab_name": "Fleshweaver",
+      "entry_id": 9905,
+      "spell_id": 681078,
+      "name": "Pooled Vitality",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Ranger",
+      "tab_name": "Archery",
+      "entry_id": 4028,
+      "spell_id": 92115,
+      "name": "Skirmisher",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Ranger",
+      "tab_name": "Brigand",
+      "entry_id": 4029,
+      "spell_id": 92116,
+      "name": "Ravager",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Chronomancer",
+      "tab_name": "Infinite",
+      "entry_id": 4031,
+      "spell_id": 92118,
+      "name": "Infinite Power",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Chronomancer",
+      "tab_name": "Artificer",
+      "entry_id": 4033,
+      "spell_id": 92120,
+      "name": "Echo Fragments",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Necromancer",
+      "tab_name": "Animation",
+      "entry_id": 4036,
+      "spell_id": 92123,
+      "name": "Summoning Adept",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Pyromancer",
+      "tab_name": "Flameweaving",
+      "entry_id": 4038,
+      "spell_id": 92126,
+      "name": "Spirit of the Phoenix",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Starcaller",
+      "tab_name": "Moon Guard",
+      "entry_id": 4043,
+      "spell_id": 92132,
+      "name": "Moon Guard",
+      "tooltip_required_level": 10
+    },
+    {
+      "class_name": "Starcaller",
+      "tab_name": "Moon Priest",
+      "entry_id": 4045,
+      "spell_id": 92134,
+      "name": "Moon Priest",
+      "tooltip_required_level": 10
+    }
+  ],
+  "class_pool_unknown_level_count": 801,
+  "class_pool_unknown_level_samples": [
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29783,
+      "spell_id": 802792,
+      "name": "Jawbreaker"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29793,
+      "spell_id": 804137,
+      "name": "Headhunter's Spear"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29803,
+      "spell_id": 560906,
+      "name": "First Blood"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29608,
+      "spell_id": 706354,
+      "name": "Face Smasher"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34276,
+      "spell_id": 561322,
+      "name": "Bellowing Voice"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34277,
+      "spell_id": 560886,
+      "name": "Savage Strength"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34279,
+      "spell_id": 560456,
+      "name": "Athleticism"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34291,
+      "spell_id": 705169,
+      "name": "Unrelenting"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34295,
+      "spell_id": 707721,
+      "name": "Iron Gut"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34299,
+      "spell_id": 804746,
+      "name": "Dauntless"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34302,
+      "spell_id": 705171,
+      "name": "Rapid Recovery"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34303,
+      "spell_id": 805821,
+      "name": "Blood and Glory"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 34320,
+      "spell_id": 705206,
+      "name": "Ogre's Endurance"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 30762,
+      "spell_id": 500918,
+      "name": "Ancestral Roar"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 30767,
+      "spell_id": 800152,
+      "name": "Hodir's Wrath"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 30770,
+      "spell_id": 707207,
+      "name": "Forward Advance"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 30870,
+      "spell_id": 806228,
+      "name": "Defiance"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 30162,
+      "spell_id": 804139,
+      "name": "Maiming Spear"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 6462,
+      "spell_id": 706353,
+      "name": "Unstoppable Rage"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 6374,
+      "spell_id": 801549,
+      "name": "Thick Skull"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 4297,
+      "spell_id": 801767,
+      "name": "Bloodbound"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 5373,
+      "spell_id": 800131,
+      "name": "Born Killer"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 6753,
+      "spell_id": 560364,
+      "name": "Drunken Brawler"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 6790,
+      "spell_id": 706352,
+      "name": "War Tales"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 6802,
+      "spell_id": 705202,
+      "name": "Strength of Goria"
+    }
+  ]
+}

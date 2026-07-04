@@ -205,6 +205,28 @@ test("validator rejects records without schema metadata", () => {
   assert(summary.failures.some(failure => failure.includes("missing schema_version")));
 });
 
+test("validator accepts optional M1.8 source and availability fields", () => {
+  const dir = tempProject();
+  const { dist, reports } = writeValidationFixture(dir, {
+    source_category: "spec_tree",
+    source_confidence: "high",
+    availability: {
+      builder_required_level: 0,
+      tooltip_required_level: 10,
+      db_tooltip_required_level: null,
+      effective_required_level: 10,
+      level_source: "builder_tooltip",
+      level_confidence: "medium",
+      notes: ["builder_required_level_zero_but_tooltip_has_level"]
+    }
+  });
+
+  const summary = validateNormalizedArtifacts({ distDir: dist, reportsDir: reports });
+
+  assert.equal(summary.status, "pass");
+  assert.equal(summary.m1_8_source_records, 1);
+});
+
 test("manifest writer records builder, validation, artifact hashes, and missing optional files", () => {
   const dir = tempProject();
   const reports = path.join(dir, "reports");
@@ -373,4 +395,45 @@ test("DB enrichment can be joined into normalized entries", async () => {
   assert.equal(rows[0].db_enrichment.status, "matched");
   assert.equal(rows[0].availability.effective_required_level, 10);
   assert.equal(rows[0].availability.level_source, "db_tooltip");
+});
+
+test("source level report summarizes metadata tabs and level quality", async () => {
+  const { buildSourceLevelReport } = await import("../scripts/write-source-level-report.mjs");
+  const classes = [
+    validClass({
+      tabs: [
+        { tab_id: 77, tab_name: "Stalking", sort_order: 2, nominal_essence_kind: "talent" },
+        { tab_id: 1, tab_name: "Class", sort_order: 0, nominal_essence_kind: "ability" },
+        { tab_id: 2, tab_name: "None", sort_order: 1, nominal_essence_kind: "talent" }
+      ]
+    })
+  ];
+  const entries = [
+    validNode({
+      required_level: 0,
+      availability: {
+        tooltip_required_level: 10,
+        effective_required_level: 10,
+        level_confidence: "medium"
+      }
+    }),
+    validNode({
+      entry_id: 124,
+      spell_id: 789,
+      tab_id: 1,
+      tab_name: "Class",
+      source_category: "class_pool",
+      availability: {
+        tooltip_required_level: null,
+        effective_required_level: 0,
+        level_confidence: "low"
+      }
+    })
+  ];
+
+  const { metadata, report } = buildSourceLevelReport(entries, classes);
+
+  assert.deepEqual(metadata.tabs_without_nodes.map(row => row.tab_name), ["None"]);
+  assert.equal(report.required_level_zero_with_tooltip_level_count, 1);
+  assert.equal(report.class_pool_unknown_level_count, 1);
 });
