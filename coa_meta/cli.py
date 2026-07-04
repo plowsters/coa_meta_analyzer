@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Sequence
+
+from .report_assets import AssetResolver
+from .reporting import MetaReportRunner, MetaRunConfig, write_report_outputs
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="coa_meta")
+    subparsers = parser.add_subparsers(dest="command")
+
+    meta = subparsers.add_parser("meta", help="Generate Phase 1 theorycraft meta reports")
+    meta.add_argument("--entries", type=Path, default=Path("coa_scraper/dist/coa_entries.jsonl"))
+    meta.add_argument("--classes", dest="classes_path", type=Path, default=Path("coa_scraper/dist/coa_classes.json"))
+    meta.add_argument("--level", type=int, default=60)
+    meta.add_argument("--class", dest="class_names", action="append", default=[])
+    meta.add_argument("--spec", dest="specs", action="append", default=[])
+    meta.add_argument("--encounter-profile", dest="encounters", action="append", default=[])
+    meta.add_argument("--top", type=int, default=3)
+    meta.add_argument("--beam-width", type=int, default=5)
+    meta.add_argument("--branch-width", type=int, default=10)
+    meta.add_argument("--require-budget-fraction", type=float, default=0.7)
+    meta.add_argument("--workers", type=int, default=1)
+    meta.add_argument("--format", dest="formats", action="append", choices=("json", "md", "html"), default=[])
+    meta.add_argument("--out", type=Path, default=Path("reports/meta"))
+    meta.add_argument("--asset-root", type=Path, default=None)
+    meta.set_defaults(handler=run_meta)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+    handler = getattr(args, "handler", None)
+    if handler is None:
+        parser.print_help()
+        return 2
+    return int(handler(args))
+
+
+def run_meta(args: argparse.Namespace) -> int:
+    config = MetaRunConfig(
+        entries_path=args.entries,
+        classes_path=args.classes_path,
+        class_names=tuple(args.class_names),
+        spec_names_or_ids=tuple(args.specs),
+        level=args.level,
+        encounter_profile_ids=tuple(args.encounters) if args.encounters else ("baseline_single_target",),
+        top=args.top,
+        beam_width=args.beam_width,
+        branch_width=args.branch_width,
+        require_budget_fraction=args.require_budget_fraction,
+    )
+    report = MetaReportRunner(config).run()
+    formats = tuple(args.formats) if args.formats else ("json", "md", "html")
+    asset_resolver = AssetResolver(args.asset_root) if args.asset_root else None
+    write_report_outputs(report, args.out, formats=formats, asset_resolver=asset_resolver)
+    return 0
