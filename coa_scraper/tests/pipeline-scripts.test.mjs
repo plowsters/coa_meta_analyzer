@@ -11,6 +11,11 @@ import {
   sha256File,
   writeJson
 } from "../scripts/lib/artifacts.mjs";
+import {
+  extractLinkedIds,
+  parsePowerPayload,
+  stripTooltipHtml
+} from "../scripts/lib/ascensiondb.mjs";
 import { validateNormalizedArtifacts } from "../scripts/validate-normalized.mjs";
 import { writeArtifactManifest } from "../scripts/write-artifact-manifest.mjs";
 
@@ -106,6 +111,24 @@ function writeValidationFixture(dir, nodeOverrides = {}) {
   return { dist, reports };
 }
 
+const SPELL_POWER_FIXTURE = `$WowheadPower.registerSpell(92117, 0, {
+    "name_enus": "Dream Flowers",
+    "icon": "inv_legion_faction_dreamweavers",
+    "tooltip_enus": "<table><tr><td><span class=\\"q\\"><span style=\\"color: #66DDFF;\\">Level 10 Passive</span><br />Your damaging critical strikes spawn a <a href=\\"?spell=561005\\">Dream Flower</a>.</span></td></tr></table><!--?92117:1:1:80-->",
+    "spells_enus": [],
+    "buff_enus": "",
+    "buffspells_enus": []
+});`;
+
+const EMPTY_SPELL_POWER_FIXTURE = `$WowheadPower.registerSpell(804137, 0, {});`;
+
+const ITEM_POWER_FIXTURE = `$WowheadPower.registerItem(23887, 0, {
+    "name_enus": "Schematic: Rocket Boots Xtreme",
+    "quality": 3,
+    "icon": "inv_boots_09",
+    "tooltip_enus": "<table><tr><td><b class=\\"q3\\">Schematic: Rocket Boots Xtreme</b><br />Requires Level 58<br /><span class=\\"q2\\">Use: <a href=\\"?spell=30556\\">Teaches you how to make Rocket Boots Xtreme.</a></span><br /><span class=\\"q3\\"><a href=\\"?item=23824\\">Rocket Boots Xtreme</a></span></td></tr></table>"
+});`;
+
 test("artifact utilities hash, load, and describe files", () => {
   const dir = tempProject();
   const file = path.join(dir, "data.json");
@@ -180,4 +203,62 @@ test("manifest writer records builder, validation, artifact hashes, and missing 
   assert.equal(manifest.validation.status, "pass");
   assert(manifest.artifacts.some(artifact => artifact.path === "dist/coa_entries.jsonl" && artifact.sha256));
   assert(manifest.artifacts.some(artifact => artifact.missing === true));
+});
+
+test("AscensionDB parser reads spell power payloads", () => {
+  const parsed = parsePowerPayload(SPELL_POWER_FIXTURE, {
+    kind: "spell",
+    id: 92117,
+    url: "https://db.ascension.gg/?spell=92117&power"
+  });
+
+  assert.equal(parsed.kind, "spell");
+  assert.equal(parsed.id, 92117);
+  assert.equal(parsed.status, "matched");
+  assert.equal(parsed.name, "Dream Flowers");
+  assert.equal(parsed.icon, "inv_legion_faction_dreamweavers");
+  assert.equal(parsed.tooltip_level, 10);
+  assert.deepEqual(parsed.linked_spell_ids, [561005]);
+  assert.deepEqual(parsed.linked_item_ids, []);
+  assert.match(parsed.tooltip_text, /Level 10 Passive/);
+  assert.equal(parsed.provenance.url, "https://db.ascension.gg/?spell=92117&power");
+});
+
+test("AscensionDB parser classifies empty spell registrations", () => {
+  const parsed = parsePowerPayload(EMPTY_SPELL_POWER_FIXTURE, {
+    kind: "spell",
+    id: 804137,
+    url: "https://db.ascension.gg/?spell=804137&power"
+  });
+
+  assert.equal(parsed.kind, "spell");
+  assert.equal(parsed.id, 804137);
+  assert.equal(parsed.status, "empty_registration");
+  assert.equal(parsed.name, null);
+  assert.equal(parsed.tooltip_html, "");
+  assert.deepEqual(parsed.linked_spell_ids, []);
+});
+
+test("AscensionDB parser reads item power payloads", () => {
+  const parsed = parsePowerPayload(ITEM_POWER_FIXTURE, {
+    kind: "item",
+    id: 23887,
+    url: "https://db.ascension.gg/?item=23887&power"
+  });
+
+  assert.equal(parsed.kind, "item");
+  assert.equal(parsed.id, 23887);
+  assert.equal(parsed.status, "matched");
+  assert.equal(parsed.name, "Schematic: Rocket Boots Xtreme");
+  assert.equal(parsed.required_level, 58);
+  assert.deepEqual(parsed.linked_spell_ids, [30556]);
+  assert.deepEqual(parsed.linked_item_ids, [23824]);
+});
+
+test("tooltip utilities strip HTML and extract linked ids", () => {
+  const html = `<span>Requires Level 20</span><a href="?spell=100">Spell</a><a href="?item=200">Item</a>`;
+
+  assert.equal(stripTooltipHtml(html), "Requires Level 20 Spell Item");
+  assert.deepEqual(extractLinkedIds(html, "spell"), [100]);
+  assert.deepEqual(extractLinkedIds(html, "item"), [200]);
 });
