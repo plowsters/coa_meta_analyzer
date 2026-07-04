@@ -22,3 +22,24 @@ The current codebase has three prototype areas:
 - `CoADataLogger/`: minimal WotLK 3.3.5 addon scaffold that captures player-sourced combat events and basic snapshots to SavedVariables.
 
 The target architecture keeps those concerns separate. Scrapers produce versioned structured data. Analyzers validate and enrich it. Optimizers consume only normalized data. Addons and logs provide empirical calibration data. Web frontends display reports and collect user inputs, but do not own simulation logic.
+
+## Phase 1 Meta Report Command
+
+After installing the package or running from the repository root, generate a theorycraft meta report with:
+
+```bash
+python -m coa_meta meta \
+  --entries coa_scraper/dist/coa_entries.jsonl \
+  --classes coa_scraper/dist/coa_classes.json \
+  --out reports/meta \
+  --format json --format md --format html
+```
+
+Useful bounded runs:
+
+```bash
+python -m coa_meta meta --class Venomancer --top 1 --format json --out reports/meta-smoke
+python -m coa_meta meta --class "Sun Cleric" --spec Blessings --level 60 --out reports/sun-cleric-blessings
+```
+
+The report emits projected theorycraft indexes. It does not emit observed DPS, simulated DPS, or empirical rankings.

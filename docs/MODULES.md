@@ -460,3 +460,9 @@ Non-responsibilities:
 - `coa_meta.report_assets`: resolves optional local scraper assets for static HTML output.
 
 M1.6 reports use `coa-meta-report-v1`. JSON is canonical; Markdown and HTML are derived views.
+
+## CLI and Packaging
+
+- `coa_meta.cli`: thin argparse command adapter. It constructs `MetaRunConfig`, calls `MetaReportRunner`, and writes requested report formats.
+- `coa_meta.__main__`: enables `python -m coa_meta`.
+- `pyproject.toml`: package metadata and package-data inclusion for built-in scoring/APL profiles.

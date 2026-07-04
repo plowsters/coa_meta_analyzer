@@ -117,6 +117,11 @@ Exit criteria:
 - Tests pass without requiring browser automation.
 - Browser capture tests are separate and can be skipped when Chromium is unavailable.
 
+Implementation note:
+
+- The release path is `python -m coa_meta meta ...`.
+- Browser capture remains part of `coa_scraper/` and is not required for package tests.
+
 ## Phase 2: Data-Driven Calibration Release
 
 Purpose: make the tool learn from real combat data. Phase 2 uses combat logs and addon snapshots to calibrate the Phase 1 theorycraft model. It still should not require a full simulator, but it should correct weights, proc assumptions, uptime assumptions, and target-count behavior from evidence.
@@ -245,4 +250,3 @@ Exit criteria:
 
 - New builder data can be ingested without breaking historical reports.
 - Meta shifts can be traced to data changes, model changes, or empirical evidence.
-
