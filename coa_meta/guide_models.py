@@ -202,6 +202,7 @@ class GuideBuildCard:
     projected_dps_index: float
     node_ids: tuple[int, ...]
     warnings: tuple[str, ...]
+    tree: GuideTree | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -211,6 +212,7 @@ class GuideBuildCard:
             "projected_dps_index": self.projected_dps_index,
             "node_ids": list(self.node_ids),
             "warnings": list(self.warnings),
+            "tree": self.tree.to_dict() if self.tree else None,
         }
 
 

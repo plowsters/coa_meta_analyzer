@@ -57,3 +57,14 @@ def test_guide_nodes_include_links_tooltips_and_icons():
     assert node.db_url == "https://db.ascension.gg/?spell=2001"
     assert node.tooltip_id == "spell:2001"
     assert node.asset.asset_id.startswith("icon:")
+
+
+def test_guide_build_cards_include_static_tree_payloads():
+    site = build_guide_site(_report(), entries_path=FIXTURES / "meta_report_fixture.jsonl")
+    damage = site.specs[0]
+    build = damage.builds[0]
+
+    assert build.tree is not None
+    assert build.tree.class_name == "Testclass"
+    assert any(node.entry_id == 201 for node in build.tree.nodes)
+    assert any(snapshot.level == 60 for snapshot in build.tree.snapshots)

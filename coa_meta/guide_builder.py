@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .builds import BuildConfig
 from .guide_assets import GuideAssetCatalog
 from .guide_models import (
     GuideBuildCard,
@@ -10,6 +11,7 @@ from .guide_models import (
     GuideSite,
     GuideSpec,
 )
+from .guide_tree import build_guide_tree
 from .guide_tooltips import build_node_tooltip, load_db_tooltip_rows
 from .reporting import MetaReport, slugify_key
 from .repository import TalentRepository
@@ -74,7 +76,16 @@ def build_guide_site(
                 )
             )
 
-        builds = tuple(_build_cards(result))
+        builds = tuple(
+            _build_cards(
+                result,
+                repository=repository,
+                relevant_nodes=tuple(relevant_nodes),
+                guide_nodes=tuple(guide_nodes),
+                max_ae=int(data.get("run_config", {}).get("max_ae") or 26),
+                max_te=int(data.get("run_config", {}).get("max_te") or 25),
+            )
+        )
         warnings = tuple(result.get("warnings", []))
         confidence = builds[0].confidence_label if builds else "low"
         specs.append(
@@ -107,18 +118,45 @@ def build_guide_site(
     )
 
 
-def _build_cards(result: dict) -> list[GuideBuildCard]:
+def _build_cards(
+    result: dict,
+    *,
+    repository: TalentRepository,
+    relevant_nodes: tuple,
+    guide_nodes: tuple[GuideNode, ...],
+    max_ae: int,
+    max_te: int,
+) -> list[GuideBuildCard]:
     cards = []
+    guide_nodes_by_id = {node.entry_id: node for node in guide_nodes}
     for build in result.get("top_builds", []):
         node_ids = tuple(node["node_id"] for node in build.get("selected_nodes", []))
+        label = f"Build {build['rank']}"
+        tree = build_guide_tree(
+            repository=repository,
+            class_name=str(result["class_name"]),
+            spec_name=str(result["spec_name"]),
+            build_rank=int(build["rank"]),
+            build_label=label,
+            selected_node_ids=node_ids,
+            config=BuildConfig(
+                class_name=str(result["class_name"]),
+                level=int(result["level"]),
+                max_ae=max_ae,
+                max_te=max_te,
+            ),
+            spec_nodes=relevant_nodes,
+            guide_nodes_by_id=guide_nodes_by_id,
+        )
         cards.append(
             GuideBuildCard(
                 rank=int(build["rank"]),
-                label=f"Build {build['rank']}",
+                label=label,
                 confidence_label=str(build["confidence_label"]),
                 projected_dps_index=float(build["projected_dps_index"]),
                 node_ids=node_ids,
                 warnings=tuple(build.get("warnings", [])),
+                tree=tree,
             )
         )
     return cards
