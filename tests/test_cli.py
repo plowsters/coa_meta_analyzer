@@ -54,6 +54,8 @@ def test_meta_cli_dispatches_to_runner_and_writers(monkeypatch, tmp_path):
             "8",
             "--require-budget-fraction",
             "0.5",
+            "--role",
+            "tank",
             "--format",
             "json",
             "--format",
@@ -73,6 +75,7 @@ def test_meta_cli_dispatches_to_runner_and_writers(monkeypatch, tmp_path):
     assert DummyRunner.last_config.beam_width == 4
     assert DummyRunner.last_config.branch_width == 8
     assert DummyRunner.last_config.require_budget_fraction == 0.5
+    assert DummyRunner.last_config.role == "tank"
     assert written["formats"] == ("json", "html")
     assert written["out_dir"] == tmp_path
 

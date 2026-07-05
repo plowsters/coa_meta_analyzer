@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import json
 import tomllib
 from pathlib import Path
 
@@ -36,3 +37,12 @@ def test_pyproject_declares_package_data_and_console_script():
     package_data = data["tool"]["setuptools"]["package-data"]["coa_meta"]
     assert "data/scoring_profiles/*.json" in package_data
     assert "data/apl_profiles/*.json" in package_data
+
+
+def test_root_package_json_delegates_scraper_pipeline_commands():
+    path = Path("package.json")
+
+    assert path.exists()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    scripts = data["scripts"]
+    assert scripts["pipeline:m1.8"] == "npm --prefix coa_scraper run pipeline:m1.8"

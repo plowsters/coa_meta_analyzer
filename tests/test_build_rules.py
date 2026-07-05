@@ -41,6 +41,15 @@ def test_missing_prerequisite_and_tab_gate_are_explained():
     assert "tab_te_gate_unmet" in result.issue_codes()
 
 
+def test_zero_cost_nodes_unlock_after_paid_prerequisites_are_selected():
+    result = rules().validate([SelectedRank(101, 1), SelectedRank(105, 1)])
+
+    assert result.valid is True
+    assert result.state is not None
+    assert 104 in result.state.free_node_ids
+    assert 105 in result.state.selected_ids
+
+
 def test_budget_and_rank_failures_are_explained():
     result = rules(max_te=2).validate([SelectedRank(102, 4)])
 

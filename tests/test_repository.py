@@ -13,8 +13,9 @@ def test_repository_loads_nodes_by_class_and_name():
 
     nodes = repo.nodes_for_class("Testclass")
 
-    assert len(nodes) == 4
+    assert len(nodes) == 6
     assert repo.node_by_name("Testclass", "poison talent").entry_id == 102
+    assert repo.node_by_name("Testclass", "unlocked free poison").entry_id == 104
     assert repo.node_by_id(101).class_name == "Testclass"
 
 

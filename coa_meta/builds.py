@@ -27,6 +27,18 @@ class BuildRules:
         }
 
     def initial_state(self) -> BuildState:
+        free_ids = self._free_closure(set())
+        return BuildState(
+            class_name=self.config.class_name,
+            selected_ranks=tuple(),
+            free_node_ids=tuple(sorted(free_ids)),
+            ae_spent=0,
+            te_spent=0,
+            tab_ae=tuple(),
+            tab_te=tuple(),
+        )
+
+    def _free_closure(self, paid_selected_ids: set[int]) -> set[int]:
         selected: set[int] = set()
         changed = True
         while changed:
@@ -34,18 +46,11 @@ class BuildRules:
             for node in self.nodes.values():
                 if node.entry_id in selected or node.paid or node.required_level > self.config.level:
                     continue
-                if all(required_id in selected or required_id not in self.nodes for required_id in node.required_ids):
+                available_ids = selected | paid_selected_ids
+                if all(required_id in available_ids or required_id not in self.nodes for required_id in node.required_ids):
                     selected.add(node.entry_id)
                     changed = True
-        return BuildState(
-            class_name=self.config.class_name,
-            selected_ranks=tuple(),
-            free_node_ids=tuple(sorted(selected)),
-            ae_spent=0,
-            te_spent=0,
-            tab_ae=tuple(),
-            tab_te=tuple(),
-        )
+        return selected
 
     def validate(self, selected: list[SelectedRank]) -> BuildValidationResult:
         issues: list[ValidationIssue] = []
@@ -57,7 +62,7 @@ class BuildRules:
                 issues.append(ValidationIssue("duplicate_node", f"Node {item.node_id} selected more than once", item.node_id))
             by_id[item.node_id] = item.rank
 
-        free_ids = set(self.initial_state().free_node_ids)
+        free_ids = self._free_closure(set(by_id))
         selected_ids = set(by_id) | free_ids
         ae_spent = 0
         te_spent = 0

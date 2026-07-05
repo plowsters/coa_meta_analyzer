@@ -49,8 +49,10 @@ The report emits projected theorycraft indexes. It does not emit observed DPS, s
 The default Phase 1 report path remains network-free after artifacts exist. To refresh source and level enrichment from AscensionDB, run:
 
 ```bash
-cd coa_scraper
 npm run pipeline:m1.8
 ```
+
+From inside `coa_scraper/`, the equivalent command is `npm run pipeline:m1.8`; from any other working
+directory, use `npm --prefix coa_scraper run pipeline:m1.8`.
 
 This writes DB tooltip artifacts and an enriched entries file. AscensionDB enrichment is used for provenance and lower-level confidence; it does not replace builder legality fields.
