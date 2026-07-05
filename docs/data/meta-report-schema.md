@@ -20,7 +20,9 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 - `class_name`
 - `spec_id`
 - `spec_name`
-- `role`
+- `role`: player-facing guide role; one of `melee_dps`, `caster_dps`, `tank`, `healer`, or `support`
+- `engine_role`: broad role used for existing scoring/APL/stat/gear compatibility; one of `dps`, `tank`, or `healer_support`
+- `role_provenance`: `coa-role-resolution-v1` payload describing role source, confidence, evidence, engine-role bridge, and role scores
 - `level`
 - `encounter_profile_id`
 - `search_profile_id`
@@ -40,8 +42,10 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 - `generated_apl`
 - `simulation_result`
 - `rotation_summary`
-- `stat_priority`
-- `gear_recommendation`
+- `stat_priority`: legacy list-style stat priority retained for compatibility
+- `stat_priority_report`: `coa-stat-priority-v2` grouped guide stat payload
+- `gear_recommendation`: legacy broad weapon/armor recommendation retained for compatibility
+- `gear_recommendation_report`: `coa-gear-recommendation-v2` best-vs-available guide gear payload
 - `explanation`
 - `provenance`
 - `playstyle_fingerprint`
@@ -59,15 +63,69 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 
 `rotation_loop` has schema version `coa-rotation-loop-v1` and provides player-facing objective, opener, core loop, cooldown, role-specific, resource, maintenance, and reliability notes derived from the generated APL.
 
-## M1.10 Planned Guide Extensions
+## Role Resolution
 
-The M1.10 guide-site renderer should keep JSON canonical and add structured fields before relying on HTML-only state.
+`role_provenance` has schema version `coa-role-resolution-v1`:
 
-Planned additions:
+- `role`: player-facing role used by guide filters and section wording
+- `engine_role`: broad role routed into existing scoring and APL profile loaders
+- `source`: `authoritative`, `curated`, `inferred`, or `configured`
+- `confidence`: `high`, `medium`, or `low`
+- `evidence`: short source strings or score summaries
+- `scores`: role scores when inference was used
 
-- `role` should expand from Phase 1's broad roles to `melee_dps`, `caster_dps`, `tank`, `healer`, and `support`, with role provenance.
+The compatibility bridge is:
+
+- `melee_dps` and `caster_dps` -> `dps`
+- `tank` -> `tank`
+- `healer` and `support` -> `healer_support`
+
+## Stat Priority Report
+
+`stat_priority_report` has schema version `coa-stat-priority-v2`:
+
+- `role`: player-facing guide role
+- `engine_role`: broad compatibility role
+- `disclaimer`: one section-level player warning, currently used to state that stat priorities are early theorycraft until simulations or combat logs are available
+- `source`: currently `heuristic`
+- `confidence`: heuristic confidence label
+- `groups`: grouped stat entries, usually `primary`, `secondary`, and `situational`
+- `warnings`: section-level warnings such as `stat_priority_not_simulated`
+
+Each group contains:
+
+- `group_id`
+- `label`
+- `entries`: legacy `StatPriority` objects with `stat`, `weight`, `confidence`, and `reason`
+
+The legacy `stat_priority` field remains readable for one schema generation. New guide rendering should prefer `stat_priority_report`.
+
+## Gear Recommendation Report
+
+`gear_recommendation_report` has schema version `coa-gear-recommendation-v2`:
+
+- `role`: player-facing guide role
+- `engine_role`: broad compatibility role
+- `best_weapon_types`
+- `best_armor_types`
+- `available_weapon_types`
+- `available_armor_types`
+- `item_scores`: ranked item payloads when item data exists
+- `source`: `defaults`, `item_data`, or `mixed`
+- `confidence`: heuristic confidence label
+- `warnings`: section-level warnings such as `item_data_missing` and `gear_targets_from_role_defaults`
+
+The legacy `gear_recommendation` field remains readable for one schema generation. New guide rendering should prefer `gear_recommendation_report`.
+
+## M1.10 Guide Extensions
+
+The M1.10 guide-site renderer keeps JSON canonical and avoids relying on HTML-only state.
+
+Implemented additions:
+
+- `role` expands from Phase 1's broad roles to `melee_dps`, `caster_dps`, `tank`, `healer`, and `support`, with role provenance.
 - Build results include a playstyle fingerprint, diversity-selection reason, performance-band metadata, and player-facing rotation loop.
 - Spec results should include guide navigation metadata, player-facing labels, and tooltip definitions for analyzer-only metrics.
 - Selected nodes should include enough tooltip/link/icon data for static guide rendering, or the renderer should join against normalized entries by `entry_id`.
 - Talent tree payloads should be explicit about level gates, AE/TE gates, prerequisite failures, and selected rank state.
-- Stat and gear sections should expose source warnings once per section rather than repeating them for every entry.
+- Stat and gear sections expose source warnings once per section rather than repeating them for every entry.

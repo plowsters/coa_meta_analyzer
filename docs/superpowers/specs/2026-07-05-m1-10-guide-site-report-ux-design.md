@@ -2,7 +2,7 @@
 
 Date: 2026-07-05
 
-Implementation status: M1.10A/B and M1.10C/D are implemented in the current repo. M1.10E/F is designed and ready for implementation.
+Implementation status: M1.10A/B, M1.10C/D, and M1.10E/F are implemented in the current repo.
 
 ## Goal
 
