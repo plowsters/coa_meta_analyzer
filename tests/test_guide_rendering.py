@@ -57,7 +57,27 @@ def test_render_spec_html_links_spell_and_tooltip_ids():
     assert 'data-tooltip-id="spell:2001"' in html
 
 
+def test_render_spec_html_includes_static_talent_tree():
+    site = _site()
+    spec = next(item for item in site.specs if item.spec_name == "Damage")
+
+    html = render_spec_html(site, spec)
+
+    assert 'class="talent-tree"' in html
+    assert 'class="tree-links"' in html
+    assert "data-tree-level-selector" in html
+    assert 'data-tree-node-id="201"' in html
+    assert "AE" in html
+    assert "TE" in html
+
+
 def test_static_assets_have_fel_void_theme_and_no_network_fetch():
     assert "#65f06b" in GUIDE_CSS
     assert "#8f5cff" in GUIDE_CSS
     assert "fetch(" not in GUIDE_JS
+
+
+def test_static_tree_javascript_has_no_network_calls():
+    assert "fetch(" not in GUIDE_JS
+    assert "XMLHttpRequest" not in GUIDE_JS
+    assert "getBoundingClientRect" in GUIDE_JS

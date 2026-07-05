@@ -31,6 +31,26 @@ a { color: var(--fel); }
 .node-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .node-card { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; border: 1px solid rgba(101,240,107,.18); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.03); }
 .icon-frame { width: 42px; height: 42px; border-radius: 6px; border: 1px solid var(--fel); display: grid; place-items: center; color: var(--fel); background: rgba(101,240,107,.09); box-shadow: inset 0 0 12px rgba(101,240,107,.12); }
+.tree-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
+.tree-toolbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; }
+.tree-scroll { overflow-x: auto; padding-bottom: 8px; }
+.talent-tree { position: relative; display: grid; grid-template-columns: repeat(var(--tree-cols), 72px); grid-template-rows: repeat(var(--tree-rows), 72px); gap: 22px; min-width: max-content; padding: 18px; border: 1px solid rgba(143,92,255,.28); border-radius: 8px; background: radial-gradient(circle at center, rgba(143,92,255,.10), rgba(9,5,15,.45)); }
+.talent-tree[hidden] { display: none; }
+.tree-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.tree-links line { stroke: rgba(143,92,255,.45); stroke-width: 3; filter: drop-shadow(0 0 5px rgba(143,92,255,.35)); }
+.tree-links line.is-selected { stroke: var(--fel); filter: drop-shadow(0 0 7px rgba(101,240,107,.55)); }
+.tree-links line.is-available { stroke: var(--void); }
+.tree-node { position: relative; z-index: 1; width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid rgba(143,92,255,.5); border-radius: 50%; color: var(--text); background: rgba(19,11,30,.94); box-shadow: inset 0 0 16px rgba(143,92,255,.16); cursor: help; }
+.tree-node.shape-square { border-radius: 12px; }
+.tree-node.shape-hex { clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
+.tree-node.is-selected { border-color: var(--fel); box-shadow: 0 0 18px rgba(101,240,107,.42), inset 0 0 18px rgba(101,240,107,.16); }
+.tree-node.is-free { border-color: rgba(101,240,107,.6); color: var(--fel); }
+.tree-node.is-available { border-color: var(--void); box-shadow: 0 0 14px rgba(143,92,255,.34); }
+.tree-node.is-gated, .tree-node.is-inactive { opacity: .54; filter: grayscale(.35); }
+.tree-node.is-over-budget { border-color: var(--warning); box-shadow: 0 0 16px rgba(245,197,66,.28); }
+.tree-rank { position: absolute; right: -7px; bottom: -7px; min-width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: #09050f; font-size: .72rem; }
+.leveling-path { margin-top: 14px; display: grid; gap: 8px; }
+.leveling-path li { margin-bottom: 4px; color: var(--muted); }
 .tooltip { position: fixed; z-index: 20; max-width: 360px; padding: 12px; border: 1px solid var(--void); border-radius: 8px; background: #09050f; box-shadow: 0 0 28px rgba(143,92,255,.25); }
 @media (max-width: 720px) { .site-shell { padding: 16px; } .hero { padding: 20px; } }
 """
@@ -71,6 +91,78 @@ GUIDE_JS = """
       card.hidden = role !== "all" && card.getAttribute("data-role") !== role;
     });
   });
+  function parseJson(value, fallback) {
+    try { return JSON.parse(value || ""); } catch (_error) { return fallback; }
+  }
+  function stateClass(state) {
+    if (state === "selected" || state === "free" || state === "available" || state === "over_budget") return "is-" + state.replace("_", "-");
+    if ((state || "").startsWith("gated_")) return "is-gated";
+    return "is-inactive";
+  }
+  function applySnapshot(panel, tree, level) {
+    const snapshots = parseJson(tree.getAttribute("data-tree-snapshots"), []);
+    const snapshot = snapshots.find(item => String(item.level) === String(level)) || snapshots[snapshots.length - 1] || {};
+    const selected = new Set((snapshot.selected_node_ids || []).map(String));
+    const free = new Set((snapshot.free_node_ids || []).map(String));
+    const available = new Set((snapshot.available_node_ids || []).map(String));
+    const gated = new Map((snapshot.gated_nodes || []).map(item => [String(item.node_id), item.state]));
+    tree.querySelectorAll("[data-tree-node-id]").forEach(node => {
+      const id = node.getAttribute("data-tree-node-id");
+      node.classList.remove("is-selected", "is-free", "is-available", "is-gated", "is-inactive", "is-over-budget");
+      let state = "inactive";
+      if (free.has(id)) state = "free";
+      else if (selected.has(id)) state = "selected";
+      else if (available.has(id)) state = "available";
+      else if (gated.has(id)) state = gated.get(id);
+      node.classList.add(stateClass(state));
+      node.setAttribute("data-state", state);
+    });
+    const summary = panel.querySelector("[data-tree-budget-summary]");
+    if (summary) summary.textContent = `AE ${snapshot.ae_spent || 0}/${snapshot.max_ae || 0} - TE ${snapshot.te_spent || 0}/${snapshot.max_te || 0}`;
+    drawTreeLinks(tree);
+  }
+  function drawTreeLinks(tree) {
+    const svg = tree.querySelector(".tree-links");
+    if (!svg) return;
+    const edges = parseJson(svg.getAttribute("data-tree-edges"), []);
+    const treeRect = tree.getBoundingClientRect();
+    svg.innerHTML = "";
+    edges.forEach(edge => {
+      const source = tree.querySelector(`[data-tree-node-id="${edge.source_id}"]`);
+      const target = tree.querySelector(`[data-tree-node-id="${edge.target_id}"]`);
+      if (!source || !target) return;
+      const a = source.getBoundingClientRect();
+      const b = target.getBoundingClientRect();
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", String(a.left + a.width / 2 - treeRect.left));
+      line.setAttribute("y1", String(a.top + a.height / 2 - treeRect.top));
+      line.setAttribute("x2", String(b.left + b.width / 2 - treeRect.left));
+      line.setAttribute("y2", String(b.top + b.height / 2 - treeRect.top));
+      line.classList.add("is-" + (edge.state || "inactive"));
+      svg.appendChild(line);
+    });
+  }
+  function initTrees() {
+    document.querySelectorAll("[data-guide-tree-panel]").forEach(panel => {
+      const buildSelector = panel.querySelector("[data-tree-build-selector]");
+      const levelSelector = panel.querySelector("[data-tree-level-selector]");
+      function currentTree() {
+        const id = buildSelector ? buildSelector.value : panel.querySelector(".talent-tree")?.getAttribute("data-tree-id");
+        return panel.querySelector(`.talent-tree[data-tree-id="${id}"]`) || panel.querySelector(".talent-tree");
+      }
+      function refresh() {
+        panel.querySelectorAll(".talent-tree").forEach(tree => { tree.hidden = tree !== currentTree(); });
+        const tree = currentTree();
+        if (!tree) return;
+        applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+      }
+      if (buildSelector) buildSelector.addEventListener("change", refresh);
+      if (levelSelector) levelSelector.addEventListener("change", refresh);
+      refresh();
+    });
+  }
+  window.addEventListener("resize", () => document.querySelectorAll(".talent-tree").forEach(drawTreeLinks));
+  document.addEventListener("DOMContentLoaded", initTrees);
 })();
 """
 
@@ -113,7 +205,7 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
         f'<span class="chip">{_e(_label(spec.role))}</span> <span class="chip">{_e(spec.confidence_label)} confidence</span></section>'
         f'<nav class="guide-nav">{nav}</nav>'
         f'<section class="panel" id="recommended-builds"><h2>Recommended Builds</h2><p>Early theorycraft picks.</p>{builds}</section>'
-        '<section class="panel" id="talents"><h2>Talents</h2><p>Interactive tree view arrives in M1.10C.</p></section>'
+        f"{_render_talent_tree_section(spec)}"
         '<section class="panel" id="rotation"><h2>Rotation</h2><p>Use the generated priority notes as an early rotation scaffold.</p></section>'
         '<section class="panel warning" id="stats"><h2>Stats</h2><p>Stat priorities are early theorycraft until simulations or combat logs are available.</p></section>'
         '<section class="panel" id="weapons-and-armor"><h2>Weapons and Armor</h2><p>Gear targeting is low confidence until item data is complete.</p></section>'
@@ -142,6 +234,83 @@ def _render_build(build: Any) -> str:
         f"<span class=\"chip\" data-tooltip-id=\"metric:projected_dps_index\">Projected Index {build.projected_dps_index:.1f}</span></p>"
         "</article>"
     )
+
+
+def _render_talent_tree_section(spec: GuideSpec) -> str:
+    tree_builds = [build for build in spec.builds if build.tree]
+    if not tree_builds:
+        return '<section class="panel" id="talents"><h2>Talents</h2><p>No talent tree data is available for this build.</p></section>'
+    first_tree = tree_builds[0].tree
+    assert first_tree is not None
+    build_options = "".join(
+        f'<option value="{_e(build.tree.tree_id if build.tree else "")}">{_e(build.label)}</option>'
+        for build in tree_builds
+    )
+    levels = sorted({snapshot.level for build in tree_builds if build.tree for snapshot in build.tree.snapshots})
+    level_options = "".join(
+        f'<option value="{level}"{" selected" if level == first_tree.level else ""}>Level {level}</option>'
+        for level in levels
+    )
+    trees = "".join(
+        _render_tree(build.tree, hidden=index > 0)
+        for index, build in enumerate(tree_builds)
+        if build.tree
+    )
+    leveling_path = _render_leveling_path(first_tree)
+    return (
+        '<section class="panel" id="talents" data-guide-tree-panel>'
+        "<h2>Talents</h2>"
+        '<div class="tree-toolbar">'
+        f'<label>Build <select data-tree-build-selector>{build_options}</select></label>'
+        f'<label>Level <select data-tree-level-selector>{level_options}</select></label>'
+        f'<span class="chip" data-tree-budget-summary>AE {first_tree.ae_spent}/{first_tree.max_ae} - TE {first_tree.te_spent}/{first_tree.max_te}</span>'
+        "</div>"
+        f'<div class="tree-scroll">{trees}</div>'
+        f"{leveling_path}"
+        "</section>"
+    )
+
+
+def _render_tree(tree: Any, *, hidden: bool) -> str:
+    edges = _json_attr([edge.to_dict() for edge in tree.edges])
+    snapshots = _json_attr([snapshot.to_dict() for snapshot in tree.snapshots])
+    nodes = "".join(_render_tree_node(node) for node in tree.nodes)
+    return (
+        f'<div class="talent-tree" data-tree-id="{_e(tree.tree_id)}" data-tree-level="{tree.level}" '
+        f'data-tree-snapshots="{snapshots}" style="--tree-cols: {tree.cols}; --tree-rows: {tree.rows}"'
+        f'{" hidden" if hidden else ""}>'
+        f'<svg class="tree-links" data-tree-edges="{edges}" aria-hidden="true"></svg>'
+        f"{nodes}</div>"
+    )
+
+
+def _render_tree_node(node: Any) -> str:
+    shape = "shape-square" if "square" in node.node_type.lower() else "shape-hex" if "hex" in node.node_type.lower() else "shape-circle"
+    state_class = _tree_state_class(node.tree_state)
+    label = node.name[:2].upper()
+    rank = f"{node.rank}/{node.max_rank}" if node.max_rank > 1 else str(node.rank or 1)
+    return (
+        f'<button class="tree-node {shape} {state_class}" data-tree-node-id="{node.entry_id}" '
+        f'data-tooltip-id="{_e(node.tooltip_id)}" data-state="{_e(node.tree_state)}" '
+        f'data-rank="{node.rank}" data-max-rank="{node.max_rank}" '
+        f'style="grid-column: {node.col + 1 if node.col is not None else 1}; grid-row: {node.row + 1 if node.row is not None else 1}" '
+        f'aria-label="{_e(node.name)}">'
+        f'<span>{_e(label)}</span><span class="tree-rank">{_e(rank)}</span></button>'
+    )
+
+
+def _render_leveling_path(tree: Any) -> str:
+    selected = sorted(
+        (node for node in tree.nodes if node.selected or node.free),
+        key=lambda item: (item.required_level, item.row or 0, item.col or 0, item.name),
+    )
+    if not selected:
+        return ""
+    items = "".join(
+        f"<li><strong>{_e(node.name)}</strong> <span class=\"chip\">Level {node.required_level or 'when available'}</span></li>"
+        for node in selected[:12]
+    )
+    return f'<div class="leveling-path"><h3>Leveling Path</h3><ol>{items}</ol></div>'
 
 
 def _render_node(node: Any) -> str:
@@ -173,3 +342,15 @@ def _label(value: str) -> str:
 
 def _e(value: Any) -> str:
     return html.escape(str(value), quote=True)
+
+
+def _json_attr(value: Any) -> str:
+    return _e(json.dumps(value, sort_keys=True))
+
+
+def _tree_state_class(state: str) -> str:
+    if state in {"selected", "free", "available", "over_budget"}:
+        return f"is-{state.replace('_', '-')}"
+    if state.startswith("gated_"):
+        return "is-gated"
+    return "is-inactive"
