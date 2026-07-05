@@ -27,7 +27,8 @@ def test_meta_report_runner_generates_spec_results_from_fixture():
     assert data["spec_results"][0]["top_builds"]
     assert data["spec_results"][0]["top_builds"][0]["projected_dps_index"] > 0
     assert data["spec_results"][0]["top_builds"][0]["generated_apl"]["schema_version"] == "coa-apl-v1"
-    assert data["spec_results"][0]["summary"]["role"] == "dps"
+    assert data["spec_results"][0]["summary"]["role"] == "caster_dps"
+    assert data["spec_results"][0]["engine_role"] == "dps"
     assert data["spec_results"][0]["top_builds"][0]["rotation_summary"]["sections"]
     assert data["spec_results"][0]["top_builds"][0]["stat_priority"]
     assert "item_data_missing" in data["spec_results"][0]["top_builds"][0]["gear_recommendation"]["warnings"]
@@ -47,11 +48,36 @@ def test_meta_report_runner_infers_roles_for_specs():
     report = MetaReportRunner(config).run()
     by_spec = {result.spec_name: result for result in report.spec_results}
 
-    assert by_spec["Damage"].role == "dps"
-    assert by_spec["Support"].role == "healer_support"
+    assert by_spec["Damage"].role == "caster_dps"
+    assert by_spec["Damage"].engine_role == "dps"
+    assert by_spec["Support"].role == "healer"
+    assert by_spec["Support"].engine_role == "healer_support"
     assert by_spec["Support"].scoring_profile_id == "generic_healer_support"
     assert by_spec["Support"].apl_profile_id == "generic_healer_support"
-    assert by_spec["Support"].top_builds[0].provenance["role"] == "healer_support"
+    assert by_spec["Support"].top_builds[0].provenance["role"] == "healer"
+    assert by_spec["Support"].top_builds[0].provenance["engine_role"] == "healer_support"
+
+
+def test_meta_report_exposes_guide_role_engine_role_and_provenance():
+    config = MetaRunConfig(
+        entries_path=FIXTURES / "meta_report_fixture.jsonl",
+        classes_path=FIXTURES / "meta_classes.json",
+        class_names=("Testclass",),
+        top=1,
+        beam_width=2,
+        branch_width=2,
+        require_budget_fraction=0.0,
+    )
+
+    report = MetaReportRunner(config).run()
+    by_spec = {result.spec_name: result.to_dict() for result in report.spec_results}
+
+    assert by_spec["Damage"]["role"] in {"melee_dps", "caster_dps"}
+    assert by_spec["Damage"]["engine_role"] == "dps"
+    assert by_spec["Support"]["role"] == "healer"
+    assert by_spec["Support"]["engine_role"] == "healer_support"
+    assert by_spec["Support"]["role_provenance"]["source"] == "curated"
+    assert by_spec["Support"]["top_builds"][0]["provenance"]["engine_role"] == "healer_support"
 
 
 def test_meta_report_runner_allows_explicit_role_override():
@@ -70,7 +96,8 @@ def test_meta_report_runner_allows_explicit_role_override():
     report = MetaReportRunner(config).run()
     result = report.spec_results[0]
 
-    assert result.role == "dps"
+    assert result.role == "melee_dps"
+    assert result.engine_role == "dps"
     assert result.scoring_profile_id == "generic_dps"
 
 

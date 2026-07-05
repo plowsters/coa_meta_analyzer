@@ -159,6 +159,37 @@ def test_meta_cli_passes_guide_context_to_writer(monkeypatch, tmp_path):
     assert written["asset_resolver"] is not None
 
 
+def test_meta_cli_accepts_new_guide_role_values(monkeypatch, tmp_path):
+    calls = {}
+
+    class DummyGuideRoleRunner:
+        def __init__(self, config):
+            calls["config"] = config
+
+        def run(self):
+            return DummyReport()
+
+    monkeypatch.setattr(cli, "MetaReportRunner", DummyGuideRoleRunner)
+    monkeypatch.setattr(cli, "write_report_outputs", lambda *args, **kwargs: tuple())
+
+    exit_code = cli.main(
+        [
+            "meta",
+            "--entries",
+            str(tmp_path / "entries.jsonl"),
+            "--role",
+            "caster_dps",
+            "--format",
+            "json",
+            "--out",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls["config"].role == "caster_dps"
+
+
 def test_cli_returns_nonzero_for_unknown_command(capsys):
     exit_code = cli.main(["unknown"])
 

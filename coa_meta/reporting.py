@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +20,13 @@ from .builds import BuildConfig, BuildRules
 from .domain import TalentNode
 from .profiles import load_profile_by_role
 from .repository import TalentRepository
+from .roles import (
+    ENGINE_ROLES,
+    GUIDE_ROLES,
+    RoleResolution,
+    resolve_configured_role,
+    resolve_spec_role,
+)
 from .scoring import TheoryScorer
 from .search import BuildSearchConfig, BuildSearcher
 from .simulation import SimulationConfig, simulate_build
@@ -33,35 +39,7 @@ DEFAULT_PUBLIC_ENCOUNTER = "baseline_single_target"
 ENCOUNTER_ALIASES = {DEFAULT_PUBLIC_ENCOUNTER: "single_target"}
 SHARED_TAB_NAMES = {"Class", "None"}
 CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
-SUPPORTED_META_ROLES = {"auto", "dps", "tank", "healer_support"}
-TANK_SPEC_KEYS = {
-    "black_knight",
-    "defiance",
-    "dreadnought",
-    "fortitude",
-    "moon_guard",
-    "mountain_king",
-    "oathkeeper",
-    "seraphim",
-    "vanguard",
-}
-HEALER_SUPPORT_SPEC_KEYS = {
-    "artificer",
-    "blessings",
-    "brewing",
-    "fleshweaver",
-    "flameweaving",
-    "heretic",
-    "inspiration",
-    "invention",
-    "life",
-    "moon_priest",
-    "piety",
-    "support",
-    "time",
-    "vizier",
-    "voodoo",
-}
+SUPPORTED_META_ROLES = {"auto", *GUIDE_ROLES, *ENGINE_ROLES}
 
 
 @dataclass(frozen=True)
@@ -108,49 +86,18 @@ def slugify_key(value: str) -> str:
 
 
 def infer_spec_role(repository: TalentRepository, scope: BuildScope) -> str:
-    spec_key = scope.spec_key
-    if spec_key in TANK_SPEC_KEYS:
-        return "tank"
-    if spec_key in HEALER_SUPPORT_SPEC_KEYS:
-        return "healer_support"
-
-    nodes = [
-        node for node in repository.nodes_for_class(scope.class_name)
-        if node.tab_id == scope.spec_id and node.tab_name == scope.spec_name
-    ]
-    tags = Counter(tag for node in nodes for tag in node.tags)
-    tank_score = (tags["tank"] * 3.0) + _description_role_score(nodes, "tank")
-    healer_score = (tags["heal"] * 2.0) + (tags["hot"] * 3.0) + (tags["aura"] * 1.5)
-    support_score = (tags["aura"] * 2.0) + tags["crowd_control"] + (tags["resource_management"] * 0.5)
-
-    if tags["tank"] >= 10 and tank_score >= healer_score - 2.0:
-        return "tank"
-    if tags["heal"] >= 8 and healer_score > tank_score:
-        return "healer_support"
-    if tags["aura"] >= 8 and support_score >= tank_score:
-        return "healer_support"
-    return "dps"
+    return resolve_spec_role(repository, scope).engine_role
 
 
 def resolve_scope_role(repository: TalentRepository, scope: BuildScope, configured_role: str) -> str:
+    return resolve_scope_role_detail(repository, scope, configured_role).engine_role
+
+
+def resolve_scope_role_detail(repository: TalentRepository, scope: BuildScope, configured_role: str) -> RoleResolution:
     if configured_role not in SUPPORTED_META_ROLES:
         raise ValueError(f"Unsupported role {configured_role!r}; expected one of {sorted(SUPPORTED_META_ROLES)}")
-    if configured_role != "auto":
-        return configured_role
-    return infer_spec_role(repository, scope)
-
-
-def _description_role_score(nodes: list[TalentNode], role: str) -> float:
-    if role == "tank":
-        patterns = (r"\barmor\b", r"\bblock\b", r"\bparry\b", r"\bdodge\b", r"\bthreat\b", r"\bdamage taken\b")
-    else:
-        patterns = tuple()
-    score = 0.0
-    for node in nodes:
-        text = node.description_text.lower()
-        if any(re.search(pattern, text) for pattern in patterns):
-            score += 1.5
-    return score
+    inferred = resolve_spec_role(repository, scope)
+    return resolve_configured_role(configured_role, inferred)
 
 
 def effective_required_level(node: TalentNode) -> int:
@@ -341,6 +288,8 @@ class SpecResult:
     spec_id: int
     spec_name: str
     role: str
+    engine_role: str
+    role_provenance: dict[str, Any]
     level: int
     encounter_profile_id: str
     search_profile_id: str
@@ -356,6 +305,8 @@ class SpecResult:
             "spec_id": self.spec_id,
             "spec_name": self.spec_name,
             "role": self.role,
+            "engine_role": self.engine_role,
+            "role_provenance": self.role_provenance,
             "level": self.level,
             "encounter_profile_id": self.encounter_profile_id,
             "search_profile_id": self.search_profile_id,
@@ -413,7 +364,7 @@ class MetaReportRunner:
             assumptions=(
                 "Projected DPS index is a theorycraft score, not observed DPS.",
                 "Shared Class nodes are included for each reportable spec.",
-                "Auto role inference selects DPS, tank, or healer/support scoring and APL profiles per spec.",
+                "Auto role inference resolves player-facing roles and maps them to broad scoring/APL profiles.",
             ),
             warnings=tuple(warnings),
             class_summaries=_class_summaries(spec_results),
@@ -452,7 +403,9 @@ class MetaReportRunner:
 
     def _run_scope(self, repository: TalentRepository, scope: BuildScope) -> SpecResult:
         warnings = list(self.eligibility.scope_warnings(repository, scope))
-        role = resolve_scope_role(repository, scope, self.config.role)
+        role_resolution = resolve_scope_role_detail(repository, scope, self.config.role)
+        role = role_resolution.role
+        engine_role = role_resolution.engine_role
         eligible_ids = self.eligibility.eligible_node_ids(repository, scope)
         rules = BuildRules(
             repository,
@@ -488,10 +441,10 @@ class MetaReportRunner:
         scoring_profile, scoring_warnings = load_profile_by_role(
             scope.class_name,
             scope.spec_key,
-            role,
+            engine_role,
             scope.scoring_encounter,
         )
-        apl_profile, apl_warnings = load_apl_profile_by_role(scope.class_name, scope.spec_key, role)
+        apl_profile, apl_warnings = load_apl_profile_by_role(scope.class_name, scope.spec_key, engine_role)
         scored_rows: list[tuple[Any, Any]] = []
         for result in search_results:
             if result.state is None:
@@ -575,8 +528,8 @@ class MetaReportRunner:
                 ).to_dict()
             apl_payload = apl_doc.to_dict()
             rotation_summary = _rotation_summary(apl_payload, role)
-            stat_priority = tuple(priority.to_dict() for priority in stat_priority_for_role(role))
-            gear_recommendation = recommend_weapon_and_armor(role, tuple())
+            stat_priority = tuple(priority.to_dict() for priority in stat_priority_for_role(engine_role))
+            gear_recommendation = recommend_weapon_and_armor(engine_role, tuple())
             selected_nodes = tuple(_node_to_report(repository.node_by_id(node_id)) for node_id in sorted(result.state.selected_ids))
             selection_reason = candidate.selection_reason
             top_builds.append(
@@ -595,6 +548,8 @@ class MetaReportRunner:
                     provenance={
                         "normalized_schema": "coa-normalized-v1",
                         "role": role,
+                        "engine_role": engine_role,
+                        "role_provenance": role_resolution.to_dict(),
                         "scoring_profile_id": scoring_profile.profile_id,
                         "apl_profile_id": apl_profile.profile_id,
                     },
@@ -611,6 +566,8 @@ class MetaReportRunner:
             spec_id=scope.spec_id,
             spec_name=scope.spec_name,
             role=role,
+            engine_role=engine_role,
+            role_provenance=role_resolution.to_dict(),
             level=scope.level,
             encounter_profile_id=scope.encounter_profile_id,
             search_profile_id=scope.search_profile_id,
@@ -643,7 +600,7 @@ def _rotation_summary(apl_payload: dict[str, Any], role: str) -> dict[str, Any]:
             sections["cooldowns"].append(item)
         elif category in {"builder", "spender", "filler", "execute", "aoe"}:
             sections["builder_spender"].append(item)
-        elif category == "utility" or role in {"tank", "healer_support"}:
+        elif category == "utility" or role in {"tank", "healer", "support"}:
             sections["defensive_support"].append(item)
         else:
             sections["opener"].append(item)
@@ -674,9 +631,13 @@ def _summary_strengths(best: BuildReport | None, role: str) -> list[str]:
         return ["No legal build found with current gates."]
     if role == "tank":
         return ["Prioritizes defensive, mitigation, and control features from normalized tags."]
-    if role == "healer_support":
-        return ["Prioritizes healing, aura, and group utility features from normalized tags."]
-    return ["Prioritizes damage, resource, cooldown, and proc features from normalized tags."]
+    if role == "healer":
+        return ["Prioritizes healing throughput, recovery windows, and ally support from normalized tags."]
+    if role == "support":
+        return ["Prioritizes group utility, aura uptime, and flexible support tools from normalized tags."]
+    if role == "caster_dps":
+        return ["Prioritizes spell damage, effects, cooldown, and proc features from normalized tags."]
+    return ["Prioritizes melee damage, resource, cooldown, and proc features from normalized tags."]
 
 
 def _build_key(state: Any) -> str:
