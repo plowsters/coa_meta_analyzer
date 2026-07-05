@@ -699,7 +699,22 @@ def render_markdown_report(report: MetaReport) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_html_report(report: MetaReport, asset_resolver: Any | None = None) -> str:
+def render_html_report(
+    report: MetaReport,
+    asset_resolver: Any | None = None,
+    entries_path: Path | str | None = None,
+    db_tooltips_path: Path | str | None = None,
+) -> str:
+    if entries_path is not None:
+        from .guide_writer import render_guide_index_html
+
+        return render_guide_index_html(
+            report,
+            entries_path=entries_path,
+            db_tooltips_path=db_tooltips_path,
+            asset_root=getattr(asset_resolver, "asset_root", None),
+        )
+
     data = report.to_dict()
     warning_items = "".join(f"<li><code>{_html_escape(warning)}</code></li>" for warning in data["warnings"])
     sections: list[str] = []
@@ -824,6 +839,8 @@ def write_report_outputs(
     out_dir: Path | str,
     formats: tuple[str, ...] = ("json", "md", "html"),
     asset_resolver: Any | None = None,
+    entries_path: Path | str | None = None,
+    db_tooltips_path: Path | str | None = None,
 ) -> tuple[Path, ...]:
     output_dir = Path(out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -836,6 +853,19 @@ def write_report_outputs(
             path = output_dir / "meta-report.md"
             path.write_text(render_markdown_report(report), encoding="utf-8")
         elif fmt == "html":
+            if entries_path is not None:
+                from .guide_writer import write_guide_site
+
+                written.extend(
+                    write_guide_site(
+                        report,
+                        output_dir,
+                        entries_path=entries_path,
+                        db_tooltips_path=db_tooltips_path,
+                        asset_root=getattr(asset_resolver, "asset_root", None),
+                    )
+                )
+                continue
             path = output_dir / "meta-report.html"
             path.write_text(render_html_report(report, asset_resolver=asset_resolver), encoding="utf-8")
             spec_dir = output_dir / "specs"
