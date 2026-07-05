@@ -80,3 +80,5 @@ This writes DB tooltip artifacts and an enriched entries file. AscensionDB enric
 ## Current Planning Focus
 
 M1.10 is the next Phase 1 milestone. It will redesign the static report as a player-facing guide site with a fel/void visual direction, individual class/spec guide pages, CoA-style talent trees, tooltip-rich spell/talent links, better role taxonomy, diverse playstyle build selection, and clearer stat/gear/rotation sections. See [ROADMAP.md](ROADMAP.md) and [M1.10 Guide Site and Report UX Design](superpowers/specs/2026-07-05-m1-10-guide-site-report-ux-design.md).
+
+The first implementation slice is M1.10A/B: guide information architecture plus asset and tooltip integration. See [M1.10A/B Design](superpowers/specs/2026-07-05-m1-10-a-b-guide-ia-assets-design.md) and [M1.10A/B Implementation Plan](superpowers/plans/2026-07-05-m1-10-a-b-guide-ia-assets.md).

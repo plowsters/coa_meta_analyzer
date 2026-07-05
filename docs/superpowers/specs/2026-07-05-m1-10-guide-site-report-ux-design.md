@@ -30,6 +30,11 @@ The current normalized artifacts already provide enough structure for a strong s
 
 ## P1 Feature Plan
 
+Detailed follow-up docs:
+
+- [M1.10A/B Guide Information Architecture and Asset Integration Design](2026-07-05-m1-10-a-b-guide-ia-assets-design.md)
+- [M1.10A/B Guide IA and Asset Integration Implementation Plan](../plans/2026-07-05-m1-10-a-b-guide-ia-assets.md)
+
 ### Guide Information Architecture
 
 Main page:
