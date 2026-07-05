@@ -92,6 +92,8 @@ This writes DB tooltip artifacts and an enriched entries file. AscensionDB enric
 
 ## Current Planning Focus
 
-M1.10 is the next Phase 1 milestone. It will redesign the static report as a player-facing guide site with a fel/void visual direction, individual class/spec guide pages, CoA-style talent trees, tooltip-rich spell/talent links, better role taxonomy, diverse playstyle build selection, and clearer stat/gear/rotation sections. See [ROADMAP.md](ROADMAP.md) and [M1.10 Guide Site and Report UX Design](superpowers/specs/2026-07-05-m1-10-guide-site-report-ux-design.md).
+M1.10 is the active Phase 1 guide-site milestone. It redesigns the static report as a player-facing guide site with a fel/void visual direction, individual class/spec guide pages, CoA-style talent trees, tooltip-rich spell/talent links, better role taxonomy, diverse playstyle build selection, and clearer stat/gear/rotation sections. See [ROADMAP.md](ROADMAP.md) and [M1.10 Guide Site and Report UX Design](superpowers/specs/2026-07-05-m1-10-guide-site-report-ux-design.md).
 
-The first implementation slice is M1.10A/B: guide information architecture plus asset and tooltip integration. See [M1.10A/B Design](superpowers/specs/2026-07-05-m1-10-a-b-guide-ia-assets-design.md) and [M1.10A/B Implementation Plan](superpowers/plans/2026-07-05-m1-10-a-b-guide-ia-assets.md).
+M1.10A/B, guide information architecture plus asset and tooltip integration, is implemented in the current repo. See [M1.10A/B Design](superpowers/specs/2026-07-05-m1-10-a-b-guide-ia-assets-design.md) and [M1.10A/B Implementation Plan](superpowers/plans/2026-07-05-m1-10-a-b-guide-ia-assets.md).
+
+The next implementation slice is M1.10C/D: CoA-style static talent trees, level-aware legality snapshots, playstyle fingerprints, diverse build selection, and player-facing core rotation loops. See [M1.10C/D Design](superpowers/specs/2026-07-05-m1-10-c-d-tree-diversity-design.md) and [M1.10C/D Implementation Plan](superpowers/plans/2026-07-05-m1-10-c-d-tree-diversity.md).

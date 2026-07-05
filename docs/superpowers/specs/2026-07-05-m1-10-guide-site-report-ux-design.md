@@ -34,6 +34,8 @@ Detailed follow-up docs:
 
 - [M1.10A/B Guide Information Architecture and Asset Integration Design](2026-07-05-m1-10-a-b-guide-ia-assets-design.md)
 - [M1.10A/B Guide IA and Asset Integration Implementation Plan](../plans/2026-07-05-m1-10-a-b-guide-ia-assets.md)
+- [M1.10C/D Talent Tree Renderer and Build Diversity Design](2026-07-05-m1-10-c-d-tree-diversity-design.md)
+- [M1.10C/D Talent Tree Renderer and Build Diversity Implementation Plan](../plans/2026-07-05-m1-10-c-d-tree-diversity.md)
 
 ### Guide Information Architecture
 
@@ -73,6 +75,8 @@ Needs additional source work:
 
 ### CoA-Style Talent Tree Renderer
 
+Detailed design: [M1.10C/D Talent Tree Renderer and Build Diversity Design](2026-07-05-m1-10-c-d-tree-diversity-design.md).
+
 Implement now:
 
 - Use `row`, `col`, `connected_node_ids`, `required_ids`, `max_rank`, `ae_cost`, `te_cost`, `required_tab_ae`, `required_tab_te`, and effective required level.
@@ -88,6 +92,8 @@ Avoid in P1:
 - Editable build sharing unless the builder import/export format is extracted and tested.
 
 ### Rotation and Build Diversity
+
+Detailed design: [M1.10C/D Talent Tree Renderer and Build Diversity Design](2026-07-05-m1-10-c-d-tree-diversity-design.md).
 
 Current report output should stop simply listing action categories. M1.10 should derive:
 
