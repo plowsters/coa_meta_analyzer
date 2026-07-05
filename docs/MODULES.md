@@ -401,7 +401,7 @@ Non-responsibilities:
 
 Current status:
 
-- Not implemented.
+- M1.9 first-pass scaffold exists in `coa_meta/combat/`, `coa_meta/simulation.py`, and `coa_meta/apl_interpreter.py`.
 
 Target package:
 
@@ -437,34 +437,42 @@ Non-responsibilities:
 
 Current status:
 
-- Not implemented.
+- Planned for M1.10 as a static GitHub Pages-friendly guide-site renderer over generated report JSON.
 
 Responsibilities:
 
-- Browse classes, tabs, nodes, builds, APLs, and reports.
-- Import normalized artifacts and logs through backend APIs.
-- Compare builds by source: theory, empirical, simulated, blended.
-- Make confidence and assumptions visible.
+- Render a guide index and individual class/spec guide pages from `coa-meta-report-v1`.
+- Provide player-facing Overview, Builds, Talent Tree, Rotation, Stats, Gear, Abilities/Talents, Warnings, and Data Notes sections.
+- Use normalized icon paths, local scraper assets, and AscensionDB spell links for spell/talent presentation.
+- Render CoA-style talent trees from row/column, edge, rank, cost, level, and prerequisite data.
+- Provide hover tooltips, metric explanations, role filters, encounter filters, and responsive navigation.
+- Compare builds by projected source: theory, empirical, simulated, or blended as later phases add them.
+- Make confidence, assumptions, provenance, and warnings visible without making the main UX read like an implementation report.
 
 Inputs:
 
-- Backend API responses.
+- `coa-meta-report-v1` JSON.
+- Normalized entries/classes artifacts when a richer static page needs spell/talent metadata not embedded in the report.
+- Optional scraper asset manifests and local icon/media assets.
 
 Outputs:
 
-- Interactive reports.
-- Shareable static report exports.
+- Static HTML/CSS/JS reports suitable for GitHub Pages.
+- Tooltip payloads and asset manifests.
+- Shareable spec-guide pages.
 
 Non-responsibilities:
 
 - Owning legality, scoring, or simulation logic.
+- Reusing the live CoA builder runtime.
+- Fetching remote data at view time unless explicitly configured for a future dynamic app.
 
 ## Meta Report Runner
 
 - `coa_meta.reporting`: expands class/spec scopes, applies eligibility rules, runs legal search, scoring, APL generation, and writes canonical report data.
 - `coa_meta.report_assets`: resolves optional local scraper assets for static HTML output.
 
-M1.6 reports use `coa-meta-report-v1`. JSON is canonical; Markdown and HTML are derived views.
+M1.6 reports use `coa-meta-report-v1`. JSON is canonical; Markdown and HTML are derived views. M1.10 should extend derived views into a guide-site presentation without making HTML the source of truth.
 
 ## CLI and Packaging
 

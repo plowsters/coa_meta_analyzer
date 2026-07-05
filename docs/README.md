@@ -1,6 +1,6 @@
 # CoA Meta Analyzer Documentation
 
-This directory documents the intended architecture and release roadmap for the Conquest of Azeroth meta analyzer. The current repository contains prototype scripts and captured data; these docs define how those pieces should become production-ready modules.
+This directory documents the architecture and release roadmap for the Conquest of Azeroth meta analyzer. The current repository contains the Phase 1 package, the scraper/normalization pipeline, legacy prototype scripts, and planning docs for the next guide-site milestone.
 
 ## Document Map
 
@@ -15,10 +15,11 @@ This directory documents the intended architecture and release roadmap for the C
 
 ## Current Repository Snapshot
 
-The current codebase has three prototype areas:
+The current codebase has these main areas:
 
-- `coa_scraper/`: Playwright/HAR capture, Next Flight payload extraction, normalization scripts, and captured reports/dist artifacts.
-- `coa_optimizer_extensible.py` and `coa_graph_optimizer.py`: prototype optimizer scripts with repository, legality, scoring, rotation, graph export, and log parsing concepts mostly contained in one file.
+- `coa_meta/`: Phase 1 package for normalized data loading, build legality/search, scoring profiles, APL generation, combat engine scaffolding, mechanics inference, stat/gear placeholders, report generation, and CLI entrypoints.
+- `coa_scraper/`: Playwright/HAR capture, Next Flight payload extraction, normalization, AscensionDB enrichment, and captured reports/dist artifacts.
+- `coa_optimizer_extensible.py` and `coa_graph_optimizer.py`: legacy prototype optimizer scripts retained for experimentation and compatibility.
 - `CoADataLogger/`: minimal WotLK 3.3.5 addon scaffold that captures player-sourced combat events and basic snapshots to SavedVariables.
 
 The target architecture keeps those concerns separate. Scrapers produce versioned structured data. Analyzers validate and enrich it. Optimizers consume only normalized data. Addons and logs provide empirical calibration data. Web frontends display reports and collect user inputs, but do not own simulation logic.
@@ -44,6 +45,25 @@ python -m coa_meta meta --class "Sun Cleric" --spec Blessings --level 60 --out r
 
 The report emits projected theorycraft indexes. It does not emit observed DPS, simulated DPS, or empirical rankings.
 
+The command writes progress logs to stderr, including start, artifact/report stages, output formats, and completion.
+
+The legacy prototype can also be run from the repository root. Prefer the scraper artifact path:
+
+```bash
+python coa_optimizer_extensible.py optimize \
+  --entries coa_scraper/dist/coa_entries.jsonl \
+  --class-name Venomancer \
+  --profile stalker \
+  --encounter single_target \
+  --level 60 \
+  --max-ae 26 \
+  --max-te 25 \
+  --top 10 \
+  --show-rotation
+```
+
+For compatibility, the prototype now resolves a missing root-level `dist/coa_entries.jsonl` to `coa_scraper/dist/coa_entries.jsonl` when that artifact exists.
+
 ## Optional M1.8 DB Enrichment
 
 The default Phase 1 report path remains network-free after artifacts exist. To refresh source and level enrichment from AscensionDB, run:
@@ -56,3 +76,7 @@ From inside `coa_scraper/`, the equivalent command is `npm run pipeline:m1.8`; f
 directory, use `npm --prefix coa_scraper run pipeline:m1.8`.
 
 This writes DB tooltip artifacts and an enriched entries file. AscensionDB enrichment is used for provenance and lower-level confidence; it does not replace builder legality fields.
+
+## Current Planning Focus
+
+M1.10 is the next Phase 1 milestone. It will redesign the static report as a player-facing guide site with a fel/void visual direction, individual class/spec guide pages, CoA-style talent trees, tooltip-rich spell/talent links, better role taxonomy, diverse playstyle build selection, and clearer stat/gear/rotation sections. See [ROADMAP.md](ROADMAP.md) and [M1.10 Guide Site and Report UX Design](superpowers/specs/2026-07-05-m1-10-guide-site-report-ux-design.md).

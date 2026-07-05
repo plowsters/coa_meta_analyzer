@@ -161,3 +161,16 @@ Reasoning:
 - The builder payload carries active builder graph data that DB pages do not expose as a coherent build graph.
 - AscensionDB exposes richer spell and item tooltip payloads through `&power` endpoints.
 - DB records can be missing, empty, permission-restricted, or named differently from builder nodes, so enrichment needs confidence and coverage rather than blind overwrites.
+
+## Decision 16: Static Guides Render Canonical Data
+
+Status: accepted.
+
+M1.10 guide pages should be derived from canonical report JSON, normalized entries/classes, and asset manifests. HTML, CSS, and JavaScript may improve presentation, filtering, tooltips, and talent-tree interactions, but they must not become a separate source for legality, scoring, role inference, or simulation logic.
+
+Reasoning:
+
+- GitHub Pages requires a static-first presentation path.
+- Player-facing guide UX should not make future data corrections harder to audit.
+- CoA-style talent trees can be rendered from normalized row/column, edge, cost, rank, prerequisite, and level-gate fields without reusing the live builder runtime.
+- Retail guide resources are useful information architecture references, but direct copying of layout, text, styling, or proprietary assets is out of scope.

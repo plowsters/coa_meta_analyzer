@@ -14,21 +14,21 @@ Design goals:
 
 Typical usage:
   python coa_optimizer_extensible.py optimize \
-    --entries ./dist/coa_entries.jsonl \
+    --entries ./coa_scraper/dist/coa_entries.jsonl \
     --class-name Venomancer \
     --profile stalker \
     --encounter single_target \
     --level 60 --max-ae 26 --max-te 25 --top 10
 
   python coa_optimizer_extensible.py optimize \
-    --entries ./dist/coa_entries.jsonl \
+    --entries ./coa_scraper/dist/coa_entries.jsonl \
     --class-name Venomancer \
     --profile stalker \
     --encounter aoe \
     --json
 
   python coa_optimizer_extensible.py rotation \
-    --entries ./dist/coa_entries.jsonl \
+    --entries ./coa_scraper/dist/coa_entries.jsonl \
     --class-name Venomancer \
     --profile stalker \
     --encounter single_target \
@@ -37,7 +37,7 @@ Typical usage:
   python coa_optimizer_extensible.py parse-log --combat-log ./Logs/WoWCombatLog.txt --player "Yourname"
 
   python coa_optimizer_extensible.py graph \
-    --entries ./dist/coa_entries.jsonl --class-name Venomancer \
+    --entries ./coa_scraper/dist/coa_entries.jsonl --class-name Venomancer \
     --export-graph venomancer_graph.json --export-cypher venomancer_graph.cypher
 
 Notes:
@@ -70,6 +70,34 @@ from coa_meta.domain import SelectedRank as PackageSelectedRank
 from coa_meta.repository import TalentRepository as PackageTalentRepository
 
 EncounterType = Literal["single_target", "aoe", "cleave", "solo"]
+
+
+def resolve_entries_path(entries_path: Path, cwd: Path | None = None) -> tuple[Path, str | None]:
+    """Resolve legacy root-level dist paths to the scraper artifact directory."""
+
+    base_dir = cwd or Path.cwd()
+    requested = entries_path if entries_path.is_absolute() else base_dir / entries_path
+    if requested.exists():
+        return requested, None
+
+    normalized_request = entries_path.as_posix().lstrip("./")
+    if normalized_request == "dist/coa_entries.jsonl":
+        fallback = base_dir / "coa_scraper" / "dist" / "coa_entries.jsonl"
+        if fallback.exists():
+            return fallback, (
+                "Requested entries path dist/coa_entries.jsonl was not found; "
+                "using coa_scraper/dist/coa_entries.jsonl instead."
+            )
+
+    return entries_path, None
+
+
+def resolve_entries_arg(args: argparse.Namespace) -> Path:
+    resolved, note = resolve_entries_path(args.entries)
+    if note:
+        print(f"[coa-optimizer] {note}", file=sys.stderr)
+    args.entries = resolved
+    return resolved
 
 
 # -----------------------------
@@ -1077,7 +1105,8 @@ def make_scorer(args: argparse.Namespace, class_name: str) -> ScoringStrategy:
 
 
 def command_optimize(args: argparse.Namespace) -> None:
-    repo = TalentRepository(args.entries)
+    entries_path = resolve_entries_arg(args)
+    repo = TalentRepository(entries_path)
     nodes = repo.by_class(args.class_name)
     config = SearchConfig(args.level, args.max_ae, args.max_te, args.beam_width, args.branch_width, args.top, args.require_budget_fraction)
     rules = BuildRules(nodes, config)
@@ -1095,7 +1124,7 @@ def command_optimize(args: argparse.Namespace) -> None:
             item["state_notes"] = notes
             selected_names = [nodes[i].name for i in st.selected if i in nodes]
             item["rotation_apl"] = generate_compat_rotation_lines(
-                entries_path=args.entries,
+                entries_path=entries_path,
                 class_name=args.class_name,
                 profile_name=args.profile,
                 encounter=args.encounter,
@@ -1122,7 +1151,7 @@ def command_optimize(args: argparse.Namespace) -> None:
         if args.show_rotation:
             selected_names = [nodes[i].name for i in st.selected if i in nodes]
             rotation_lines = generate_compat_rotation_lines(
-                entries_path=args.entries,
+                entries_path=entries_path,
                 class_name=args.class_name,
                 profile_name=args.profile,
                 encounter=args.encounter,
@@ -1135,7 +1164,8 @@ def command_optimize(args: argparse.Namespace) -> None:
 
 
 def command_rotation(args: argparse.Namespace) -> None:
-    repo = TalentRepository(args.entries)
+    entries_path = resolve_entries_arg(args)
+    repo = TalentRepository(entries_path)
     nodes = repo.by_class(args.class_name)
     selected_names = args.selected_names
     if not selected_names and args.from_build_json:
@@ -1152,7 +1182,7 @@ def command_rotation(args: argparse.Namespace) -> None:
         # Use all nodes as a rough class rotation catalog.
         selected_names = [node.name for node in nodes.values() if not node.is_passive]
     for line in generate_compat_rotation_lines(
-        entries_path=args.entries,
+        entries_path=entries_path,
         class_name=args.class_name,
         profile_name=args.profile,
         encounter=args.encounter,
@@ -1173,7 +1203,8 @@ def command_parse_log(args: argparse.Namespace) -> None:
 
 
 def command_graph(args: argparse.Namespace) -> None:
-    repo = TalentRepository(args.entries)
+    entries_path = resolve_entries_arg(args)
+    repo = TalentRepository(entries_path)
     nodes = repo.by_class(args.class_name)
     if args.summary:
         print_dataset_summary(nodes)

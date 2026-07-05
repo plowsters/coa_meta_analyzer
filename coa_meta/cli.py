@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -51,6 +52,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def run_meta(args: argparse.Namespace) -> int:
+    _log_progress(
+        "Starting meta report: "
+        f"entries={args.entries}, classes={args.classes_path}, out={args.out}"
+    )
     config = MetaRunConfig(
         entries_path=args.entries,
         classes_path=args.classes_path,
@@ -69,8 +74,16 @@ def run_meta(args: argparse.Namespace) -> int:
         simulation_seed=args.simulation_seed,
         gear_profile_path=args.gear_profile,
     )
+    _log_progress("Loading artifacts and expanding report scopes")
+    _log_progress("Running build search and scoring")
     report = MetaReportRunner(config).run()
     formats = tuple(args.formats) if args.formats else ("json", "md", "html")
     asset_resolver = AssetResolver(args.asset_root) if args.asset_root else None
-    write_report_outputs(report, args.out, formats=formats, asset_resolver=asset_resolver)
+    _log_progress(f"Writing outputs: formats={', '.join(formats)}")
+    outputs = write_report_outputs(report, args.out, formats=formats, asset_resolver=asset_resolver)
+    _log_progress(f"Complete: wrote {len(outputs)} file(s) to {args.out}")
     return 0
+
+
+def _log_progress(message: str) -> None:
+    print(f"[coa-meta] {message}", file=sys.stderr)

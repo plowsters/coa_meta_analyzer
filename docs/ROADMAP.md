@@ -122,6 +122,77 @@ Implementation note:
 - The release path is `python -m coa_meta meta ...`.
 - Browser capture remains part of `coa_scraper/` and is not required for package tests.
 
+### Milestone 1.8: Source Level and AscensionDB Enrichment
+
+Status: complete in the current repo.
+
+Requirements:
+
+- Enrich normalized builder records with AscensionDB spell tooltip data where it is more canonical than builder-rendered text.
+- Keep builder legality fields as the source of truth for AE/TE, prerequisites, and tree ownership.
+- Record source categories, source confidence, effective required level, and enrichment warnings per record.
+- Keep the default report path network-free after artifacts have been generated.
+
+Exit criteria:
+
+- `npm --prefix coa_scraper run pipeline:m1.8` regenerates normalized, enriched, and manifest artifacts.
+- Validation reports identify source-level uncertainty instead of silently treating unknown levels as reliable.
+
+### Milestone 1.9: Combat Engine and Theorycraft Completion
+
+Status: complete as a first pass in the current repo.
+
+Requirements:
+
+- Add a deterministic combat engine scaffold with time, events, RNG, combat state, and APL execution boundaries.
+- Add mechanics inference/repository hooks so tooltip-derived mechanics can be separated from hand-authored mechanics data.
+- Add stat priority, gear recommendation, calibration, and simulation-result fields to the meta report schema.
+- Add role-aware report generation so tank and healer/support specs are not forced through pure DPS scoring.
+- Add P2 planning for Vercel free-tier personal upload/simulation APIs.
+
+Exit criteria:
+
+- Package tests cover the combat engine scaffold, mechanics schema, calibration hooks, role-aware reports, stat priorities, and gear recommendations.
+- Reports remain labeled as theorycraft/simulated according to evidence source.
+
+### Milestone 1.10: Static Guide Site and Player-Facing Report UX
+
+Status: planned.
+
+Purpose: turn the Phase 1 meta report from an analyst table into a GitHub Pages-friendly class/spec guide site for CoA players.
+
+Requirements:
+
+- Replace the dense landing table with a class/spec guide index, role filters, encounter filters, and prominent links into individual spec guides.
+- Redesign the HTML report with a fel/void green-purple theme, wider responsive layouts, sticky guide navigation, readable cards, hover tooltips, and mobile-safe spacing.
+- Use player-facing WoW guide language. Move CoA Meta Analyzer internals into concise tooltip explanations for metrics such as Confidence, Projected DPS Index, and data warnings.
+- Generate individual spec guide pages with Overview, Builds, Talent Tree, Rotation, Stats, Gear, Abilities/Talents, Warnings, and Changelog-style data provenance sections.
+- Integrate icons/images from normalized `icon` fields, scraper assets, AscensionDB links, and later class/spec media assets. Every spell/talent with a spell ID should link to its `db.ascension.gg` spell page.
+- Render selected builds in a CoA-builder-like tree using normalized row/column, connection, rank, cost, level, and prerequisite fields. The tree should support hover tooltips and level/AE/TE legality feedback without requiring the live builder runtime.
+- Order build recommendations by when abilities and talents become available while still showing the level-60 build target.
+- Show the stat priority disclaimer once per spec, not once per stat entry.
+- Split weapon and armor recommendations into "Best targets for this spec" and "Available to this class/spec", with icons where data exists.
+- Replace category-only rotation summaries with a core repeatable loop, opener notes, cooldown usage, defensive/healing/support priorities, and reliability warnings.
+- Hide the Warnings section entirely when there are no warnings.
+- Expand role taxonomy to `melee_dps`, `caster_dps`, `tank`, `healer`, and `support`. Prefer authoritative CoA/Ascension source data if available; otherwise record metadata-inference provenance.
+- Change default build selection from raw top three to two or three reliable, distinct playstyles selected from the top performance band.
+
+P1 sub-milestones:
+
+- M1.10A Guide information architecture: static route structure, guide page templates, navigation, player-facing copy rules, and metric tooltip definitions.
+- M1.10B Asset and tooltip integration: icon resolver, class/spec media catalog, AscensionDB hotlinks, hover tooltip payloads, missing-asset fallback policy, and asset manifest updates.
+- M1.10C CoA-style talent tree renderer: static tree layout from normalized row/column/edges, rank/cost badges, level gating, AE/TE legality checks, hover tooltips, and lightweight JavaScript for interactions.
+- M1.10D Rotation and build diversity heuristics: playstyle fingerprints from selected nodes/APL actions, performance-band filtering, reliability scoring, and user-facing build comparison labels.
+- M1.10E Role taxonomy refinement: source-backed role mapping where possible, metadata inference fallback, separate melee/caster/healer/support/tank scoring and APL profile routing.
+- M1.10F Gear/stat presentation: single stat disclaimer, best-vs-available gear sections, icon support, and explicit source warnings for unsupported gear slots.
+
+P2/P3 follow-ups:
+
+- Sim/log-backed stat priorities, weapon/armor target weights, and rotation reliability should wait for Phase 2 data and Phase 3 simulations.
+- Personal SimC-style upload and bounded simulations belong to Milestone 2.6.
+- Cheap small/medium-model guide prose generation should wait until guide schemas are stable and can be constrained by strict templates, provenance, and review gates.
+- Full dynamic build sharing, user account workflows, and large-scale comparison tools belong to Phase 4 or later.
+
 ## Phase 2: Data-Driven Calibration Release
 
 Purpose: make the tool learn from real combat data. Phase 2 uses combat logs and addon snapshots to calibrate the Phase 1 theorycraft model. It still should not require a full simulator, but it should correct weights, proc assumptions, uptime assumptions, and target-count behavior from evidence.

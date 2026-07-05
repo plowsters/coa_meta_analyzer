@@ -94,6 +94,35 @@ def test_meta_cli_dispatches_to_runner_and_writers(monkeypatch, tmp_path):
     assert written["out_dir"] == tmp_path
 
 
+def test_meta_cli_logs_progress_stages(monkeypatch, tmp_path, capsys):
+    def fake_write_outputs(report, out_dir, formats, asset_resolver=None):
+        return (Path(out_dir) / "meta-report.json",)
+
+    monkeypatch.setattr(cli, "MetaReportRunner", DummyRunner)
+    monkeypatch.setattr(cli, "write_report_outputs", fake_write_outputs)
+
+    exit_code = cli.main(
+        [
+            "meta",
+            "--entries",
+            "coa_scraper/dist/coa_entries.jsonl",
+            "--classes",
+            "coa_scraper/dist/coa_classes.json",
+            "--format",
+            "json",
+            "--out",
+            str(tmp_path),
+        ]
+    )
+
+    stderr = capsys.readouterr().err
+    assert exit_code == 0
+    assert "[coa-meta] Starting meta report" in stderr
+    assert "[coa-meta] Running build search and scoring" in stderr
+    assert "[coa-meta] Writing outputs" in stderr
+    assert "[coa-meta] Complete" in stderr
+
+
 def test_cli_returns_nonzero_for_unknown_command(capsys):
     exit_code = cli.main(["unknown"])
 

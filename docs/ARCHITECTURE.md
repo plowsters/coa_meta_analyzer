@@ -21,6 +21,7 @@ Ascension CoA builder web app
   -> theory scoring module
   -> APL/rotation module
   -> meta report module
+  -> static guide-site renderer
 
 WoW 3.3.5 client
   -> CoADataLogger addon and/or WoWCombatLog.txt
@@ -57,6 +58,7 @@ This is intentional. Web scraping is brittle and should be isolated from build l
 5. Score builds using encounter and spec profiles.
 6. Generate editable APL scaffolds for top builds.
 7. Emit projected meta reports with confidence labels.
+8. Render player-facing guide pages from canonical report JSON.
 
 ### Data-Driven Flow
 
@@ -66,6 +68,17 @@ This is intentional. Web scraping is brittle and should be isolated from build l
 4. Derive empirical metrics.
 5. Calibrate theory weights and mechanics assumptions.
 6. Emit empirical or blended reports with sample size and uncertainty.
+
+### Static Guide-Site Flow
+
+1. Load `coa-meta-report-v1` JSON and optional scraper asset manifests.
+2. Build a landing page that indexes class/spec guides by role, class, confidence, and encounter.
+3. Generate one static guide page per class/spec/encounter scope.
+4. Render spell/talent icons, AscensionDB hotlinks, and local hover tooltip payloads from normalized records.
+5. Render CoA-style talent trees from normalized row/column, connection, cost, rank, prerequisite, and level-gate data.
+6. Keep analyzer-only terms behind tooltips and use player-facing copy in visible guide sections.
+
+This renderer is a presentation layer over report JSON. It must not own legality, scoring, role inference, or simulation rules.
 
 ## Confidence Labels
 
@@ -94,6 +107,12 @@ Raw DPS should not be shown in Phase 1. Phase 1 uses a projected DPS index. Raw 
 
 That is useful for prototyping, but not the target architecture. Phase 1 should split those concerns into a package with narrow modules and tests.
 
+## Guide UX Boundary
+
+The M1.10 guide site should model the information architecture of established WoW guide resources while using a distinct CoA Meta Analyzer visual identity. It can reuse guide patterns such as overview, talents, rotation, stats, gear, warnings, and changelog/data notes. It should not copy another site's layout, styling, text, or proprietary assets.
+
+The static site can depend on lightweight JavaScript for filters, tabs, hover tooltips, and talent-tree legality interactions. It should not depend on the live CoA builder runtime, a network API, or browser automation after artifacts are generated.
+
 ## License and Source Reuse Policy
 
 Retail tool source code can inform architecture, interfaces, and test strategy. Direct code lifting must be explicit and license-reviewed.
@@ -114,4 +133,3 @@ A module is production-ready when:
 - It can be run by command or API without editing source.
 - It preserves raw source data for audit.
 - It avoids hidden coupling to unrelated modules.
-
