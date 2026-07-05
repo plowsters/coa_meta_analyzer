@@ -131,3 +131,24 @@ def test_meta_report_runner_can_attach_simulation_results():
     assert simulation is not None
     assert simulation["schema_version"] == "coa-simulation-result-v1"
     assert simulation["source"] == "simulated"
+
+
+def test_meta_report_top_builds_include_playstyle_selection_and_rotation_loop():
+    config = MetaRunConfig(
+        entries_path=FIXTURES / "meta_report_fixture.jsonl",
+        classes_path=FIXTURES / "meta_classes.json",
+        class_names=("Testclass",),
+        spec_names_or_ids=("Damage",),
+        top=2,
+        beam_width=4,
+        branch_width=4,
+        require_budget_fraction=0.0,
+    )
+
+    report = MetaReportRunner(config).run()
+    build = report.spec_results[0].top_builds[0].to_dict()
+
+    assert build["playstyle_fingerprint"]["schema_version"] == "coa-build-playstyle-v1"
+    assert build["selection_reason"]["schema_version"] == "coa-build-selection-v1"
+    assert build["rotation_loop"]["schema_version"] == "coa-rotation-loop-v1"
+    assert build["rotation_summary"]["sections"]

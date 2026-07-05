@@ -10,6 +10,13 @@ from typing import Any
 
 from .apl import generate_apl
 from .apl_profiles import load_apl_profile_by_role
+from .build_diversity import (
+    BuildDiversityCandidate,
+    build_playstyle_fingerprint,
+    reliability_label,
+    reliability_score,
+    select_diverse_builds,
+)
 from .builds import BuildConfig, BuildRules
 from .domain import TalentNode
 from .profiles import load_profile_by_role
@@ -18,6 +25,7 @@ from .scoring import TheoryScorer
 from .search import BuildSearchConfig, BuildSearcher
 from .simulation import SimulationConfig, simulate_build
 from .gear import recommend_weapon_and_armor
+from .rotation_loops import build_rotation_loop
 from .stats import stat_priority_for_role
 
 META_REPORT_SCHEMA_VERSION = "coa-meta-report-v1"
@@ -301,6 +309,9 @@ class BuildReport:
     gear_recommendation: dict[str, Any]
     explanation: dict[str, Any]
     provenance: dict[str, Any]
+    playstyle_fingerprint: dict[str, Any]
+    selection_reason: dict[str, Any]
+    rotation_loop: dict[str, Any]
     warnings: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
@@ -317,6 +328,9 @@ class BuildReport:
             "gear_recommendation": self.gear_recommendation,
             "explanation": self.explanation,
             "provenance": self.provenance,
+            "playstyle_fingerprint": self.playstyle_fingerprint,
+            "selection_reason": self.selection_reason,
+            "rotation_loop": self.rotation_loop,
             "warnings": list(self.warnings),
         }
 
@@ -450,9 +464,10 @@ class MetaReportRunner:
                 allowed_node_ids=eligible_ids,
             ),
         )
+        candidate_limit = max(scope.top * 5, 12)
         search_results = BuildSearcher(repository, rules).search(
             BuildSearchConfig(
-                top=max(scope.top * 3, scope.top),
+                top=candidate_limit,
                 beam_width=self.config.beam_width,
                 branch_width=self.config.branch_width,
                 require_budget_fraction=self.config.require_budget_fraction,
@@ -461,7 +476,7 @@ class MetaReportRunner:
         if not search_results and self.config.require_budget_fraction > 0:
             fallback_results = BuildSearcher(repository, rules).search(
                 BuildSearchConfig(
-                    top=max(scope.top * 3, scope.top),
+                    top=candidate_limit,
                     beam_width=self.config.beam_width,
                     branch_width=self.config.branch_width,
                     require_budget_fraction=0.0,
@@ -490,8 +505,8 @@ class MetaReportRunner:
             ),
             reverse=True,
         )
-        top_builds: list[BuildReport] = []
-        for index, (result, scored) in enumerate(scored_rows[: scope.top], start=1):
+        candidates: list[BuildDiversityCandidate] = []
+        for result, scored in scored_rows:
             assert result.state is not None
             apl_doc = generate_apl(
                 result.state,
@@ -500,6 +515,52 @@ class MetaReportRunner:
                 encounter=scope.scoring_encounter,
                 profile_warnings=apl_warnings,
             )
+            selected_node_objects = tuple(
+                node for node_id in sorted(result.state.selected_ids)
+                if (node := repository.get_node(node_id)) is not None
+            )
+            candidate_warnings = tuple(scoring_warnings + list(scored.warnings) + list(apl_doc.warnings))
+            fingerprint = build_playstyle_fingerprint(nodes=selected_node_objects, apl=apl_doc, role=role)
+            reliability = reliability_score(
+                nodes=selected_node_objects,
+                apl=apl_doc,
+                role=role,
+                warnings=candidate_warnings,
+            )
+            loop = build_rotation_loop(
+                apl=apl_doc,
+                selected_nodes=selected_node_objects,
+                role=role,
+                encounter=scope.scoring_encounter,
+            )
+            candidates.append(
+                BuildDiversityCandidate(
+                    build_id=str(_build_key(result.state)),
+                    projected_dps_index=scored.projected_dps_index,
+                    confidence_label=scored.confidence,
+                    fingerprint=fingerprint,
+                    reliability_score=reliability,
+                    reliability_label=reliability_label(reliability),
+                    payload={
+                        "result": result,
+                        "scored": scored,
+                        "apl_doc": apl_doc,
+                        "rotation_loop": loop,
+                        "selected_node_objects": selected_node_objects,
+                        "warnings": candidate_warnings,
+                    },
+                    warnings=candidate_warnings,
+                )
+            )
+
+        selected_candidates = select_diverse_builds(candidates, top=scope.top)
+        top_builds: list[BuildReport] = []
+        for index, candidate in enumerate(selected_candidates, start=1):
+            payload = candidate.payload
+            result = payload["result"]
+            scored = payload["scored"]
+            apl_doc = payload["apl_doc"]
+            assert result.state is not None
             simulation_result = None
             if self.config.simulate:
                 simulation_result = simulate_build(
@@ -517,6 +578,7 @@ class MetaReportRunner:
             stat_priority = tuple(priority.to_dict() for priority in stat_priority_for_role(role))
             gear_recommendation = recommend_weapon_and_armor(role, tuple())
             selected_nodes = tuple(_node_to_report(repository.node_by_id(node_id)) for node_id in sorted(result.state.selected_ids))
+            selection_reason = candidate.selection_reason
             top_builds.append(
                 BuildReport(
                     rank=index,
@@ -536,7 +598,10 @@ class MetaReportRunner:
                         "scoring_profile_id": scoring_profile.profile_id,
                         "apl_profile_id": apl_profile.profile_id,
                     },
-                    warnings=tuple(scoring_warnings + list(scored.warnings) + list(apl_doc.warnings)),
+                    playstyle_fingerprint=candidate.fingerprint.to_dict(),
+                    selection_reason=selection_reason.to_dict() if selection_reason else {},
+                    rotation_loop=payload["rotation_loop"].to_dict(),
+                    warnings=payload["warnings"],
                 )
             )
         if not top_builds:

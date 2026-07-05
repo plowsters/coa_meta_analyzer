@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from statistics import median
 from typing import Any, Sequence
 
 from .apl import APLDocument
@@ -51,6 +52,51 @@ class PlaystyleFingerprint:
             "resources": dict(self.resources),
             "apl_categories": dict(self.apl_categories),
             "selected_node_ids": list(self.selected_node_ids),
+        }
+
+
+@dataclass(frozen=True)
+class SelectionReason:
+    schema_version: str
+    performance_band: str
+    reliability_label: str
+    diversity_label: str
+    reason: str
+    compared_to_rank_1: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "performance_band": self.performance_band,
+            "reliability_label": self.reliability_label,
+            "diversity_label": self.diversity_label,
+            "reason": self.reason,
+            "compared_to_rank_1": self.compared_to_rank_1,
+        }
+
+
+@dataclass(frozen=True)
+class BuildDiversityCandidate:
+    build_id: str
+    projected_dps_index: float
+    confidence_label: str
+    fingerprint: PlaystyleFingerprint
+    reliability_score: float
+    reliability_label: str
+    payload: Any = None
+    warnings: tuple[str, ...] = tuple()
+    selection_reason: SelectionReason | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "build_id": self.build_id,
+            "projected_dps_index": self.projected_dps_index,
+            "confidence_label": self.confidence_label,
+            "fingerprint": self.fingerprint.to_dict(),
+            "reliability_score": self.reliability_score,
+            "reliability_label": self.reliability_label,
+            "warnings": list(self.warnings),
+            "selection_reason": self.selection_reason.to_dict() if self.selection_reason else None,
         }
 
 
@@ -192,6 +238,91 @@ def reliability_label(score: float) -> str:
     return "low"
 
 
+def performance_band_floor(
+    projected_indexes: Sequence[float],
+    *,
+    minimum_relative_floor: float = 0.90,
+) -> tuple[float, tuple[str, ...]]:
+    if not projected_indexes:
+        return 0.0, tuple()
+    best = max(projected_indexes)
+    warnings: list[str] = []
+    if len(projected_indexes) >= 6:
+        med = median(projected_indexes)
+        deviations = [abs(value - med) for value in projected_indexes]
+        spread = max(1.5 * median(deviations), best * 0.05)
+        floor = best - spread
+    else:
+        floor = best * minimum_relative_floor
+    relative_floor = best * minimum_relative_floor
+    if floor < relative_floor:
+        floor = relative_floor
+    eligible = [value for value in projected_indexes if value >= floor]
+    if len(eligible) < 2 and len(projected_indexes) > 1:
+        floor = max(best * 0.88, sorted(projected_indexes, reverse=True)[1])
+        warnings.append("wide_performance_band")
+    return round(floor, 4), tuple(warnings)
+
+
+def select_diverse_builds(
+    candidates: Sequence[BuildDiversityCandidate],
+    *,
+    top: int,
+    minimum_distance: float = 0.22,
+) -> tuple[BuildDiversityCandidate, ...]:
+    if top <= 0 or not candidates:
+        return tuple()
+    ordered = sorted(candidates, key=lambda item: (item.projected_dps_index, item.reliability_score), reverse=True)
+    floor, band_warnings = performance_band_floor([candidate.projected_dps_index for candidate in ordered])
+    eligible = [candidate for candidate in ordered if candidate.projected_dps_index >= floor]
+    if not eligible:
+        eligible = ordered[:1]
+    best_score = max(candidate.projected_dps_index for candidate in ordered)
+    selected: list[BuildDiversityCandidate] = []
+
+    first = next((candidate for candidate in eligible if candidate.reliability_label in {"high", "medium"}), eligible[0])
+    selected.append(
+        _with_selection_reason(
+            first,
+            diversity_label="anchor build",
+            reason=f"{first.fingerprint.label.title()} is the strongest reliable build in the current theorycraft band.",
+            compared_to_rank_1=None,
+            band_warnings=band_warnings,
+        )
+    )
+
+    while len(selected) < top:
+        remaining = [candidate for candidate in eligible if candidate.build_id not in {item.build_id for item in selected}]
+        if not remaining:
+            break
+        scored: list[tuple[float, float, BuildDiversityCandidate]] = []
+        for candidate in remaining:
+            min_distance = min(fingerprint_distance(candidate.fingerprint, item.fingerprint) for item in selected)
+            normalized = candidate.projected_dps_index / best_score if best_score else 0.0
+            score = normalized * 0.60 + candidate.reliability_score * 0.25 + min_distance * 0.15
+            scored.append((score, min_distance, candidate))
+        scored.sort(key=lambda item: (item[1] >= minimum_distance, item[0], item[2].projected_dps_index), reverse=True)
+        _score, distance, candidate = scored[0]
+        if distance < minimum_distance and len(selected) >= 1:
+            if len(selected) + 1 < top:
+                break
+            diversity_label = "minor variation"
+            reason = f"{candidate.fingerprint.label.title()} is close to the top build but plays similarly."
+        else:
+            diversity_label = "distinct playstyle"
+            reason = f"{candidate.fingerprint.label.title()} stays in the top theorycraft band with a different button profile."
+        selected.append(
+            _with_selection_reason(
+                candidate,
+                diversity_label=diversity_label,
+                reason=reason,
+                compared_to_rank_1=f"fingerprint distance {distance:.2f}",
+                band_warnings=band_warnings,
+            )
+        )
+    return tuple(selected)
+
+
 def _label_from_features(tags: Counter[str], categories: Counter[str], role: str) -> str:
     if tags["poison"] or tags["venom"] or tags["dot"] or categories["maintenance"]:
         return "poison DoT loop" if tags["poison"] or tags["venom"] else "DoT upkeep loop"
@@ -210,6 +341,30 @@ def _label_from_features(tags: Counter[str], categories: Counter[str], role: str
     if tags:
         return f"{tags.most_common(1)[0][0]} build"
     return "generalist build"
+
+
+def _with_selection_reason(
+    candidate: BuildDiversityCandidate,
+    *,
+    diversity_label: str,
+    reason: str,
+    compared_to_rank_1: str | None,
+    band_warnings: Sequence[str],
+) -> BuildDiversityCandidate:
+    performance_band = "top theorycraft band"
+    if "wide_performance_band" in band_warnings:
+        performance_band = "widened theorycraft band"
+    return replace(
+        candidate,
+        selection_reason=SelectionReason(
+            schema_version="coa-build-selection-v1",
+            performance_band=performance_band,
+            reliability_label=candidate.reliability_label,
+            diversity_label=diversity_label,
+            reason=reason,
+            compared_to_rank_1=compared_to_rank_1,
+        ),
+    )
 
 
 def _node_text(node: TalentNode) -> str:

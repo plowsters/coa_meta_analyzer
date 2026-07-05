@@ -4,10 +4,12 @@ from pathlib import Path
 
 from coa_meta.apl import APLAction, APLDocument
 from coa_meta.build_diversity import (
+    BuildDiversityCandidate,
     build_playstyle_fingerprint,
     fingerprint_distance,
     reliability_label,
     reliability_score,
+    select_diverse_builds,
 )
 from coa_meta.repository import TalentRepository
 
@@ -71,3 +73,24 @@ def test_reliability_penalizes_missing_active_apl_actions():
 
     assert score < 0.85
     assert reliability_label(score) in {"medium", "low"}
+
+
+def test_diverse_selector_prefers_different_reliable_builds():
+    repo = TalentRepository.from_entries(FIXTURES / "meta_report_fixture.jsonl")
+    dot_fp = build_playstyle_fingerprint(nodes=[repo.node_by_id(201)], apl=None, role="melee_dps")
+    duplicate_dot_fp = build_playstyle_fingerprint(nodes=[repo.node_by_id(201), repo.node_by_id(202)], apl=None, role="melee_dps")
+    support_fp = build_playstyle_fingerprint(nodes=[repo.node_by_id(301)], apl=None, role="healer")
+
+    selected = select_diverse_builds(
+        (
+            BuildDiversityCandidate("dot-a", 100.0, "high", dot_fp, 0.9, "high"),
+            BuildDiversityCandidate("dot-b", 99.0, "high", duplicate_dot_fp, 0.9, "high"),
+            BuildDiversityCandidate("support", 97.0, "medium", support_fp, 0.85, "high"),
+        ),
+        top=2,
+        minimum_distance=0.10,
+    )
+
+    assert [candidate.build_id for candidate in selected] == ["dot-a", "support"]
+    assert selected[1].selection_reason is not None
+    assert selected[1].selection_reason.diversity_label
