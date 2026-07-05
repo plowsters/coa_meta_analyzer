@@ -58,6 +58,100 @@ class GuideTooltip:
 
 
 @dataclass(frozen=True)
+class GuideNodeGate:
+    node_id: int
+    state: str
+    reasons: tuple[str, ...]
+    issue_codes: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "state": self.state,
+            "reasons": list(self.reasons),
+            "issue_codes": list(self.issue_codes),
+        }
+
+
+@dataclass(frozen=True)
+class GuideTreeEdge:
+    source_id: int
+    target_id: int
+    kind: str
+    state: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.__dict__.copy()
+
+
+@dataclass(frozen=True)
+class GuideTreeSnapshot:
+    level: int
+    max_ae: int
+    max_te: int
+    ae_spent: int
+    te_spent: int
+    selected_node_ids: tuple[int, ...]
+    free_node_ids: tuple[int, ...]
+    available_node_ids: tuple[int, ...]
+    gated_nodes: tuple[GuideNodeGate, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "level": self.level,
+            "max_ae": self.max_ae,
+            "max_te": self.max_te,
+            "ae_spent": self.ae_spent,
+            "te_spent": self.te_spent,
+            "selected_node_ids": list(self.selected_node_ids),
+            "free_node_ids": list(self.free_node_ids),
+            "available_node_ids": list(self.available_node_ids),
+            "gated_nodes": [node.to_dict() for node in self.gated_nodes],
+        }
+
+
+@dataclass(frozen=True)
+class GuideTree:
+    tree_id: str
+    class_name: str
+    spec_name: str
+    build_rank: int
+    build_label: str
+    level: int
+    max_ae: int
+    max_te: int
+    ae_spent: int
+    te_spent: int
+    rows: int
+    cols: int
+    nodes: tuple["GuideNode", ...]
+    edges: tuple[GuideTreeEdge, ...]
+    snapshots: tuple[GuideTreeSnapshot, ...]
+    warnings: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "coa-guide-tree-v1",
+            "tree_id": self.tree_id,
+            "class_name": self.class_name,
+            "spec_name": self.spec_name,
+            "build_rank": self.build_rank,
+            "build_label": self.build_label,
+            "level": self.level,
+            "max_ae": self.max_ae,
+            "max_te": self.max_te,
+            "ae_spent": self.ae_spent,
+            "te_spent": self.te_spent,
+            "rows": self.rows,
+            "cols": self.cols,
+            "nodes": [node.to_dict() for node in self.nodes],
+            "edges": [edge.to_dict() for edge in self.edges],
+            "snapshots": [snapshot.to_dict() for snapshot in self.snapshots],
+            "warnings": list(self.warnings),
+        }
+
+
+@dataclass(frozen=True)
 class GuideNode:
     entry_id: int
     spell_id: int | None
@@ -73,10 +167,29 @@ class GuideNode:
     db_url: str | None
     tooltip_id: str
     asset: GuideAsset
+    row: int | None = None
+    col: int | None = None
+    node_type: str = "SpendCircle"
+    max_rank: int = 1
+    rank: int = 0
+    selected: bool = False
+    free: bool = False
+    required_ids: tuple[int, ...] = tuple()
+    connected_node_ids: tuple[int, ...] = tuple()
+    required_tab_ae: int = 0
+    required_tab_te: int = 0
+    availability_confidence: str = "unknown"
+    source_level: int | None = None
+    tooltip_required_level: int | None = None
+    tree_state: str = "inactive"
+    gate_reasons: tuple[str, ...] = tuple()
 
     def to_dict(self) -> dict[str, Any]:
         data = self.__dict__.copy()
         data["tags"] = list(self.tags)
+        data["required_ids"] = list(self.required_ids)
+        data["connected_node_ids"] = list(self.connected_node_ids)
+        data["gate_reasons"] = list(self.gate_reasons)
         data["asset"] = self.asset.to_dict()
         return data
 
