@@ -40,6 +40,7 @@ def test_build_guide_site_creates_index_and_spec_routes():
 def test_guide_site_has_metric_definitions_and_player_facing_sections():
     site = build_guide_site(_report(), entries_path=FIXTURES / "meta_report_fixture.jsonl")
 
+    assert "primary_index" in site.metric_definitions
     assert "projected_dps_index" in site.metric_definitions
     assert "confidence" in site.metric_definitions
     assert "Overview" in site.specs[0].sections
@@ -78,6 +79,20 @@ def test_guide_build_cards_include_playstyle_metadata():
     assert build.playstyle_label
     assert build.selection_reason
     assert build.rotation_loop
+
+
+def test_guide_build_cards_include_role_specific_objective_labels():
+    site = build_guide_site(_report(), entries_path=FIXTURES / "meta_report_fixture.jsonl")
+    support = next(spec for spec in site.specs if spec.spec_name == "Support")
+    build = support.builds[0]
+
+    assert build.primary_index == build.projected_dps_index
+    assert build.primary_index_label == "Projected Healing Index"
+    assert build.objective_id == "healing"
+
+    payload = build.to_dict()
+    assert payload["primary_index"] == payload["projected_dps_index"]
+    assert payload["primary_index_label"] == "Projected Healing Index"
 
 
 def test_guide_specs_include_role_provenance():

@@ -164,6 +164,9 @@ def _build_cards(
                 label=label,
                 confidence_label=str(build["confidence_label"]),
                 projected_dps_index=float(build["projected_dps_index"]),
+                primary_index=float(build.get("primary_index", build["projected_dps_index"])),
+                primary_index_label=str(build.get("primary_index_label") or "Projected Damage Index"),
+                objective_id=str(build.get("objective_id") or "damage"),
                 node_ids=node_ids,
                 warnings=tuple(build.get("warnings", [])),
                 playstyle_label=label,
@@ -194,6 +197,11 @@ def _summary_text(result: dict) -> str:
 
 def _metric_definitions() -> dict[str, GuideMetricDefinition]:
     return {
+        "primary_index": GuideMetricDefinition(
+            metric_id="primary_index",
+            label="Role-Specific Projected Index",
+            description="A relative theorycraft score labeled for this spec's primary role. It is not observed log or sim output.",
+        ),
         "projected_dps_index": GuideMetricDefinition(
             metric_id="projected_dps_index",
             label="Projected DPS Index",

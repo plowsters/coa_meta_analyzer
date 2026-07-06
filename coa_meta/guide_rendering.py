@@ -219,7 +219,7 @@ def render_index_html(site: GuideSite) -> str:
         for role in roles
     )
     filters += "</div>"
-    role_sections = "".join(_render_role_section(role, [spec for spec in site.specs if spec.role == role]) for role in roles)
+    role_sections = "".join(_render_role_section(role, [spec for spec in site.specs if role in _spec_roles(spec)]) for role in roles)
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
@@ -250,7 +250,7 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
         "<link rel=\"stylesheet\" href=\"../assets/guide.css\"></head><body><main class=\"site-shell\">"
         f'<p><a href="../index.html">Back to guides</a></p><section class="hero" id="overview">'
         f"<h1>{_e(spec.class_name)} - {_e(spec.spec_name)}</h1><p>{_e(spec.summary)}</p>"
-        f'<span class="chip" data-tooltip-id="role:{_e(spec.slug)}">{_e(_label(spec.role))}</span></section>'
+        f'{_role_chips(spec, tooltip_id=f"role:{spec.slug}")}</section>'
         f'<nav class="guide-nav">{nav}</nav>'
         f'<section class="panel" id="recommended-builds"><h2>Recommended Builds</h2>{builds}</section>'
         f"{_render_talent_tree_section(spec)}"
@@ -266,10 +266,11 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
 
 def _render_spec_card(spec: GuideSpec) -> str:
     warning = '<span class="chip warning">Warnings</span>' if spec.warning_count else ""
+    role_values = " ".join(_spec_roles(spec))
     return (
-        f'<article class="guide-card" data-role="{_e(spec.role)}">'
+        f'<article class="guide-card" data-role="{_e(role_values)}">'
         f"<h2>{_e(spec.class_name)} - {_e(spec.spec_name)}</h2>"
-        f"<p>{_e(spec.summary)}</p><p><span class=\"chip\">{_e(_label(spec.role))}</span> {warning}</p>"
+        f"<p>{_e(spec.summary)}</p><p>{_role_chips(spec)} {warning}</p>"
         f'<p><a href="{_e(spec.href)}">Open guide</a></p></article>'
     )
 
@@ -287,22 +288,45 @@ def _render_role_section(role: str, specs: list[GuideSpec]) -> str:
 
 
 def _ordered_roles(site: GuideSite) -> tuple[str, ...]:
-    extras = sorted({spec.role for spec in site.specs if spec.role not in ROLE_DISPLAY_ORDER})
+    site_roles = {role for spec in site.specs for role in _spec_roles(spec)}
+    extras = sorted(role for role in site_roles if role not in ROLE_DISPLAY_ORDER)
     return ROLE_DISPLAY_ORDER + tuple(extras)
 
 
 def _render_build(build: Any) -> str:
     warning = '<span class="chip warning">Warnings</span>' if build.warnings else ""
+    primary_index = build.primary_index if build.primary_index is not None else build.projected_dps_index
+    primary_index_label = build.primary_index_label or "Projected Damage Index"
     return (
         '<article class="guide-card">'
         f"<h3>{_e(build.playstyle_label or build.label)}</h3>"
         f"<p>{_e(build.selection_reason or 'Strong current theorycraft result for this spec.')}</p>"
         f"<p><span class=\"chip\">{_e(build.reliability_label or build.confidence_label)} reliability</span> "
         f"<span class=\"chip\">{_e(build.performance_band or 'top theorycraft band')}</span> "
-        f"<span class=\"chip\" data-tooltip-id=\"metric:projected_dps_index\">Projected Index {build.projected_dps_index:.1f}</span> {warning}</p>"
+        f"<span class=\"chip\" data-tooltip-id=\"metric:primary_index\">{_e(primary_index_label)} {primary_index:.1f}</span> {warning}</p>"
         '<p><a href="#talents">View tree</a></p>'
         "</article>"
     )
+
+
+def _spec_roles(spec: GuideSpec) -> tuple[str, ...]:
+    primary_role = spec.primary_role or spec.role
+    roles = spec.roles or tuple(dict.fromkeys((primary_role, *spec.secondary_roles)))
+    if roles:
+        return tuple(dict.fromkeys(str(role) for role in roles if role))
+    return (spec.role,)
+
+
+def _role_chips(spec: GuideSpec, *, tooltip_id: str = "") -> str:
+    primary_role = spec.primary_role or spec.role
+    chips: list[str] = []
+    tooltip = f' data-tooltip-id="{_e(tooltip_id)}"' if tooltip_id else ""
+    chips.append(f'<span class="chip" data-role-chip="{_e(primary_role)}"{tooltip}>{_e(_label(primary_role))}</span>')
+    for role in spec.secondary_roles:
+        if role == primary_role:
+            continue
+        chips.append(f'<span class="chip" data-role-chip="{_e(role)}">Secondary: {_e(_label(role))}</span>')
+    return " ".join(chips)
 
 
 def _render_rotation_section(spec: GuideSpec) -> str:
@@ -496,6 +520,14 @@ def _tooltip_script(site: GuideSite) -> str:
     payload["metric:projected_dps_index"] = {
         "html": "<strong>Projected DPS Index</strong><div>A relative theorycraft score, not observed DPS.</div>",
         "text": "A relative theorycraft score, not observed DPS.",
+    }
+    payload["metric:primary_index"] = {
+        "html": (
+            "<strong>Role-Specific Projected Index</strong>"
+            "<div>A relative theorycraft score labeled for this spec's primary role. "
+            "It is not observed logs or simulated output.</div>"
+        ),
+        "text": "A relative theorycraft score labeled for this spec's primary role; not observed logs or simulated output.",
     }
     return f"<script>window.COA_TOOLTIPS = {json.dumps(payload, sort_keys=True)};</script>"
 

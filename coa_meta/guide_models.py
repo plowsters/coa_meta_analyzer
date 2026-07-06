@@ -202,6 +202,9 @@ class GuideBuildCard:
     projected_dps_index: float
     node_ids: tuple[int, ...]
     warnings: tuple[str, ...]
+    primary_index: float | None = None
+    primary_index_label: str = ""
+    objective_id: str = ""
     playstyle_label: str = ""
     selection_reason: str = ""
     performance_band: str = ""
@@ -217,6 +220,9 @@ class GuideBuildCard:
             "label": self.label,
             "confidence_label": self.confidence_label,
             "projected_dps_index": self.projected_dps_index,
+            "primary_index": self.primary_index if self.primary_index is not None else self.projected_dps_index,
+            "primary_index_label": self.primary_index_label or "Projected Damage Index",
+            "objective_id": self.objective_id or "damage",
             "node_ids": list(self.node_ids),
             "warnings": list(self.warnings),
             "playstyle_label": self.playstyle_label,
