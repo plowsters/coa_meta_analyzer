@@ -225,6 +225,46 @@ def test_spec_html_renders_build_playstyle_and_core_loop():
     assert "Early theorycraft picks" not in html
 
 
+def test_spec_html_prefers_simulated_rotation_guide_over_legacy_loop():
+    site = _hybrid_site()
+    build = GuideBuildCard(
+        **{
+            **site.specs[0].builds[0].__dict__,
+            "rotation_loop": {"core_loop": ["Legacy loop should not render"], "objective": "Legacy objective"},
+            "rotation_guide": {
+                "schema_version": "coa-rotation-guide-v1",
+                "source": "simulated",
+                "reliability": "high",
+                "simulation_summary": {"action_count": 42},
+                "core_loop": [
+                    {
+                        "ability_name": "Fel Strike",
+                        "text": "Use Fel Strike as part of the repeatable core loop.",
+                        "db_url": "https://db.ascension.gg/?spell=1001",
+                    }
+                ],
+                "priority_rules": [],
+                "opener": [],
+                "cooldown_rules": [],
+                "proc_rules": [],
+                "defensive_rules": [],
+                "healing_rules": [],
+                "support_rules": [],
+                "aoe_adjustments": [],
+                "warnings": [],
+            },
+        }
+    )
+    spec = GuideSpec(**{**site.specs[0].__dict__, "builds": (build,)})
+    site = GuideSite(**{**site.__dict__, "specs": (spec,)})
+
+    html = render_spec_html(site, spec)
+
+    assert "Fel Strike" in html
+    assert "Legacy loop should not render" not in html
+    assert "high rotation reliability" in html
+
+
 def test_spec_html_renders_role_specific_projected_index_label():
     site = _site()
     spec = next(item for item in site.specs if item.spec_name == "Support")

@@ -202,6 +202,29 @@ def test_meta_report_runner_can_attach_simulation_results():
     assert simulation["source"] == "simulated"
 
 
+def test_meta_report_runner_can_attach_simulated_rotation_guides():
+    config = MetaRunConfig(
+        entries_path=FIXTURES / "meta_report_fixture.jsonl",
+        classes_path=FIXTURES / "meta_classes.json",
+        class_names=("Testclass",),
+        spec_names_or_ids=("Damage",),
+        top=1,
+        beam_width=2,
+        branch_width=2,
+        require_budget_fraction=0.0,
+        simulate_rotations=True,
+        rotation_duration_ms=10_000,
+        rotation_candidates=8,
+    )
+
+    report = MetaReportRunner(config).run()
+    build = report.spec_results[0].top_builds[0].to_dict()
+
+    assert build["rotation_guide"]["schema_version"] == "coa-rotation-guide-v1"
+    assert build["rotation_guide"]["simulation_summary"]["source"] == "simulated"
+    assert build["rotation_loop"]["schema_version"] == "coa-rotation-loop-v1"
+
+
 def test_meta_report_top_builds_include_playstyle_selection_and_rotation_loop():
     config = MetaRunConfig(
         entries_path=FIXTURES / "meta_report_fixture.jsonl",

@@ -253,6 +253,7 @@ class GuideBuildCard:
     performance_band: str = ""
     reliability_label: str = ""
     rotation_loop: dict[str, Any] | None = None
+    rotation_guide: dict[str, Any] | None = None
     stat_priority_report: dict[str, Any] | None = None
     gear_recommendation_report: dict[str, Any] | None = None
     tree: GuideTree | None = None
@@ -274,6 +275,7 @@ class GuideBuildCard:
             "performance_band": self.performance_band,
             "reliability_label": self.reliability_label,
             "rotation_loop": dict(self.rotation_loop or {}),
+            "rotation_guide": dict(self.rotation_guide or {}),
             "stat_priority_report": dict(self.stat_priority_report or {}),
             "gear_recommendation_report": dict(self.gear_recommendation_report or {}),
             "tree": self.tree.to_dict() if self.tree else None,

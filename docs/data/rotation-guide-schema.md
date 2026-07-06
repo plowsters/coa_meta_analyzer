@@ -2,7 +2,7 @@
 
 Schema version: `coa-rotation-guide-v1`
 
-Rotation guides are the M1.11E player-facing rotation payload. They are generated from structured APL data and, once later checkpoints are complete, from local rotation simulation results.
+Rotation guides are the M1.11E player-facing rotation payload. When enabled, they are generated from structured APL candidates, local rotation simulation results, and role-aware rotation scoring.
 
 `rotation_loop` remains available as a compatibility fallback. New report and guide renderers should prefer `rotation_guide` when present.
 
@@ -99,4 +99,3 @@ Build results may contain both:
 - `rotation_guide`: M1.11E guide-ready priority payload.
 
 Consumers should render `rotation_guide` first, then fall back to `rotation_loop`.
-

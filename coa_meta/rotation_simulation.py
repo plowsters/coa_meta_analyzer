@@ -9,6 +9,7 @@ from .apl import APLDocument
 
 @dataclass(frozen=True)
 class RotationSimulationConfig:
+    source: str = "simulated"
     duration_ms: int = 90_000
     target_count: int = 1
     seed: int = 1
@@ -156,7 +157,7 @@ def simulate_apl(
     }
 
     return RotationSimulationResult(
-        source="simulated",
+        source=config.source,
         duration_ms=config.duration_ms,
         events=tuple(events),
         resources=dict(state.resources),

@@ -153,6 +153,7 @@ def _build_cards(
         playstyle = dict(build.get("playstyle_fingerprint") or {})
         selection = dict(build.get("selection_reason") or {})
         rotation_loop = dict(build.get("rotation_loop") or {})
+        rotation_guide = dict(build.get("rotation_guide") or {})
         label = str(playstyle.get("label") or f"Build {build['rank']}")
         tree = build_guide_tree(
             repository=repository,
@@ -206,6 +207,7 @@ def _build_cards(
                 performance_band=str(selection.get("performance_band") or "top theorycraft band"),
                 reliability_label=str(selection.get("reliability_label") or _reliability_from_confidence(build["confidence_label"])),
                 rotation_loop=rotation_loop,
+                rotation_guide=rotation_guide,
                 stat_priority_report=dict(build.get("stat_priority_report") or {}),
                 gear_recommendation_report=dict(build.get("gear_recommendation_report") or {}),
                 tree=tree,

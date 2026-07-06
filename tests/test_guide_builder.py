@@ -194,6 +194,30 @@ def test_guide_build_cards_include_playstyle_metadata():
     assert build.rotation_loop
 
 
+def test_guide_build_cards_include_simulated_rotation_guide_when_available():
+    report = MetaReportRunner(
+        MetaRunConfig(
+            entries_path=FIXTURES / "meta_report_fixture.jsonl",
+            classes_path=FIXTURES / "meta_classes.json",
+            class_names=("Testclass",),
+            spec_names_or_ids=("Damage",),
+            top=1,
+            beam_width=2,
+            branch_width=2,
+            require_budget_fraction=0.0,
+            simulate_rotations=True,
+            rotation_duration_ms=10_000,
+            rotation_candidates=8,
+        )
+    ).run()
+    site = build_guide_site(report, entries_path=FIXTURES / "meta_report_fixture.jsonl")
+    build = site.specs[0].builds[0]
+
+    assert build.rotation_guide
+    assert build.rotation_guide["schema_version"] == "coa-rotation-guide-v1"
+    assert build.to_dict()["rotation_guide"]["source"] == "simulated"
+
+
 def test_guide_build_cards_include_role_specific_objective_labels():
     site = build_guide_site(_report(), entries_path=FIXTURES / "meta_report_fixture.jsonl")
     support = next(spec for spec in site.specs if spec.spec_name == "Support")

@@ -71,6 +71,11 @@ def test_meta_cli_dispatches_to_runner_and_writers(monkeypatch, tmp_path):
             "2",
             "--simulation-seed",
             "99",
+            "--simulate-rotations",
+            "--rotation-duration-ms",
+            "12000",
+            "--rotation-candidates",
+            "7",
             "--gear-profile",
             "gear.json",
             "--format",
@@ -97,6 +102,9 @@ def test_meta_cli_dispatches_to_runner_and_writers(monkeypatch, tmp_path):
     assert DummyRunner.last_config.simulation_duration_ms == 60_000
     assert DummyRunner.last_config.simulation_iterations == 2
     assert DummyRunner.last_config.simulation_seed == 99
+    assert DummyRunner.last_config.simulate_rotations is True
+    assert DummyRunner.last_config.rotation_duration_ms == 12_000
+    assert DummyRunner.last_config.rotation_candidates == 7
     assert DummyRunner.last_config.gear_profile_path == Path("gear.json")
     assert written["formats"] == ("json", "html")
     assert written["out_dir"] == tmp_path
@@ -126,6 +134,7 @@ def test_meta_cli_logs_progress_stages(monkeypatch, tmp_path, capsys):
             "coa_scraper/dist/coa_classes.json",
             "--format",
             "json",
+            "--simulate-rotations",
             "--out",
             str(tmp_path),
         ]
@@ -135,6 +144,7 @@ def test_meta_cli_logs_progress_stages(monkeypatch, tmp_path, capsys):
     assert exit_code == 0
     assert "[coa-meta] Starting meta report" in stderr
     assert "[coa-meta] Running build search and scoring" in stderr
+    assert "[coa-meta] Running rotation simulation" in stderr
     assert "[coa-meta] Writing outputs" in stderr
     assert "[coa-meta] Complete" in stderr
 

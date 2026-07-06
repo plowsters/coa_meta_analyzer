@@ -29,6 +29,10 @@ def build_parser() -> argparse.ArgumentParser:
     meta.add_argument("--simulation-duration", type=float, default=60.0, help="Simulation duration in seconds")
     meta.add_argument("--simulation-iterations", type=int, default=1)
     meta.add_argument("--simulation-seed", type=int, default=1)
+    meta.add_argument("--simulate-rotations", dest="simulate_rotations", action="store_true")
+    meta.add_argument("--no-simulate-rotations", dest="simulate_rotations", action="store_false")
+    meta.add_argument("--rotation-duration-ms", type=int, default=90_000)
+    meta.add_argument("--rotation-candidates", type=int, default=48)
     meta.add_argument("--gear-profile", type=Path, default=None)
     meta.add_argument("--workers", type=int, default=1)
     meta.add_argument("--format", dest="formats", action="append", choices=("json", "md", "html"), default=[])
@@ -74,10 +78,18 @@ def run_meta(args: argparse.Namespace) -> int:
         simulation_duration_ms=int(args.simulation_duration * 1000),
         simulation_iterations=args.simulation_iterations,
         simulation_seed=args.simulation_seed,
+        simulate_rotations=args.simulate_rotations,
+        rotation_duration_ms=args.rotation_duration_ms,
+        rotation_candidates=args.rotation_candidates,
         gear_profile_path=args.gear_profile,
     )
     _log_progress("Loading artifacts and expanding report scopes")
     _log_progress("Running build search and scoring")
+    if args.simulate_rotations:
+        _log_progress(
+            "Running rotation simulation: "
+            f"duration_ms={args.rotation_duration_ms}, candidates={args.rotation_candidates}"
+        )
     report = MetaReportRunner(config).run()
     formats = tuple(args.formats) if args.formats else ("json", "md", "html")
     asset_resolver = AssetResolver(args.asset_root) if args.asset_root else None

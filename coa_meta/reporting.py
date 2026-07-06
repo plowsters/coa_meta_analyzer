@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .action_catalog import build_action_catalog
 from .apl import generate_apl
 from .apl_profiles import load_apl_profile_by_role
 from .build_diversity import (
@@ -33,7 +34,13 @@ from .scoring import TheoryScorer
 from .search import BuildSearchConfig, BuildSearcher
 from .simulation import SimulationConfig, simulate_build
 from .gear import recommend_gear_for_guide_role, recommend_weapon_and_armor
+from .mechanics_inference import infer_mechanic_from_tooltip
+from .mechanics_repository import MechanicsRepository
+from .rotation_candidates import RotationCandidateConfig, generate_rotation_candidates
+from .rotation_guides import build_rotation_guide
 from .rotation_loops import build_rotation_loop
+from .rotation_scoring import score_rotation_result, select_best_rotation_candidate
+from .rotation_simulation import RotationSimulationConfig, simulate_apl
 from .stats import stat_priority_for_role, stat_priority_report_for_role
 
 META_REPORT_SCHEMA_VERSION = "coa-meta-report-v1"
@@ -216,6 +223,9 @@ class MetaRunConfig:
     simulation_duration_ms: int = 60_000
     simulation_iterations: int = 1
     simulation_seed: int = 1
+    simulate_rotations: bool = False
+    rotation_duration_ms: int = 90_000
+    rotation_candidates: int = 48
     gear_profile_path: Path | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -240,6 +250,9 @@ class MetaRunConfig:
             "simulation_duration_ms": self.simulation_duration_ms,
             "simulation_iterations": self.simulation_iterations,
             "simulation_seed": self.simulation_seed,
+            "simulate_rotations": self.simulate_rotations,
+            "rotation_duration_ms": self.rotation_duration_ms,
+            "rotation_candidates": self.rotation_candidates,
             "gear_profile_path": str(self.gear_profile_path) if self.gear_profile_path else None,
         }
 
@@ -264,6 +277,7 @@ class BuildReport:
     selection_reason: dict[str, Any]
     rotation_loop: dict[str, Any]
     warnings: tuple[str, ...]
+    rotation_guide: dict[str, Any] | None = None
     primary_index: float | None = None
     primary_index_label: str = ""
     objective_id: str = ""
@@ -297,6 +311,7 @@ class BuildReport:
             "playstyle_fingerprint": self.playstyle_fingerprint,
             "selection_reason": self.selection_reason,
             "rotation_loop": self.rotation_loop,
+            "rotation_guide": dict(self.rotation_guide or {}),
             "warnings": list(self.warnings),
         }
 
@@ -558,6 +573,16 @@ class MetaReportRunner:
                 ).to_dict()
             apl_payload = apl_doc.to_dict()
             rotation_summary = _rotation_summary(apl_payload, role)
+            rotation_guide = None
+            rotation_warnings: tuple[str, ...] = tuple()
+            if self.config.simulate_rotations:
+                rotation_guide, rotation_warnings = self._build_rotation_guide_for_candidate(
+                    apl_doc=apl_doc,
+                    selected_nodes=payload["selected_node_objects"],
+                    role=role,
+                    encounter=scope.scoring_encounter,
+                    build_id=str(_build_key(result.state)),
+                )
             stat_priority = tuple(priority.to_dict() for priority in stat_priority_for_role(engine_role))
             stat_priority_report = stat_priority_report_for_role(role, engine_role=engine_role).to_dict()
             gear_recommendation = recommend_weapon_and_armor(engine_role, tuple())
@@ -574,6 +599,7 @@ class MetaReportRunner:
             )
             selected_nodes = tuple(_node_to_report(repository.node_by_id(node_id)) for node_id in sorted(result.state.selected_ids))
             selection_reason = candidate.selection_reason
+            build_warnings = tuple(dict.fromkeys((*payload["warnings"], *rotation_warnings)))
             top_builds.append(
                 BuildReport(
                     rank=index,
@@ -600,7 +626,8 @@ class MetaReportRunner:
                     playstyle_fingerprint=candidate.fingerprint.to_dict(),
                     selection_reason=selection_reason.to_dict() if selection_reason else {},
                     rotation_loop=payload["rotation_loop"].to_dict(),
-                    warnings=payload["warnings"],
+                    warnings=build_warnings,
+                    rotation_guide=rotation_guide,
                     primary_index=objective.primary_index,
                     primary_index_label=objective.primary_index_label,
                     objective_id=objective.objective_id,
@@ -629,6 +656,59 @@ class MetaReportRunner:
             secondary_roles=role_resolution.secondary_roles,
             roles=role_resolution.roles,
         )
+
+    def _build_rotation_guide_for_candidate(
+        self,
+        *,
+        apl_doc: Any,
+        selected_nodes: tuple[TalentNode, ...],
+        role: str,
+        encounter: str,
+        build_id: str,
+    ) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+        try:
+            mechanics_repo = _mechanics_repository_from_nodes(selected_nodes)
+            action_catalog = build_action_catalog(selected_nodes, mechanics_repo, role=role, encounter=encounter)
+            rotation_candidates = generate_rotation_candidates(
+                apl_doc,
+                action_catalog,
+                role=role,
+                config=RotationCandidateConfig(max_candidates=self.config.rotation_candidates),
+            )
+            if not rotation_candidates:
+                return None, ("rotation_guide_no_executable_candidates", *action_catalog.warnings)
+
+            max_resources, initial_resources = _rotation_resource_defaults(action_catalog)
+            scored = []
+            for candidate in rotation_candidates:
+                result = simulate_apl(
+                    candidate.apl,
+                    action_catalog,
+                    RotationSimulationConfig(
+                        source=candidate.candidate_id,
+                        duration_ms=self.config.rotation_duration_ms,
+                        target_count=_target_count_for_encounter(encounter),
+                        initial_resources=initial_resources,
+                        max_resources=max_resources,
+                    ),
+                )
+                scored.append(score_rotation_result(result, role, action_catalog))
+
+            selection = select_best_rotation_candidate(tuple(scored), role)
+            candidate_by_id = {candidate.candidate_id: candidate for candidate in rotation_candidates}
+            selected_candidate = candidate_by_id.get(selection.best.candidate_id, rotation_candidates[0])
+            guide = build_rotation_guide(
+                selection,
+                selected_candidate.apl,
+                action_catalog,
+                role=role,
+                encounter=encounter,
+                build_id=build_id,
+            )
+            warnings = tuple(dict.fromkeys((*guide.warnings, *action_catalog.warnings)))
+            return guide.to_dict(), warnings
+        except Exception as exc:  # pragma: no cover - defensive report fallback
+            return None, (f"rotation_guide_failed:{exc.__class__.__name__}",)
 
 
 def _rotation_summary(apl_payload: dict[str, Any], role: str) -> dict[str, Any]:
@@ -662,6 +742,46 @@ def _rotation_summary(apl_payload: dict[str, Any], role: str) -> dict[str, Any]:
         "sections": {key: value for key, value in sections.items() if value},
         "warnings": list(apl_payload.get("warnings", [])),
     }
+
+
+def _mechanics_repository_from_nodes(selected_nodes: tuple[TalentNode, ...]) -> MechanicsRepository:
+    records = []
+    seen_spell_ids: set[int] = set()
+    for node in selected_nodes:
+        if not node.spell_id or int(node.spell_id) in seen_spell_ids:
+            continue
+        seen_spell_ids.add(int(node.spell_id))
+        records.append(
+            infer_mechanic_from_tooltip(
+                spell_id=int(node.spell_id),
+                name=node.name,
+                tooltip_text=node.description_text,
+                source_node_ids=(node.entry_id,),
+                tags=node.tags,
+                damage_schools=node.damage_schools,
+                resources=node.resources,
+            )
+        )
+    return MechanicsRepository(records)
+
+
+def _rotation_resource_defaults(action_catalog: Any) -> tuple[dict[str, float], dict[str, float]]:
+    resource_names: set[str] = set()
+    generated_names: set[str] = set()
+    for action in action_catalog.actions:
+        resource_names.update(action.costs)
+        resource_names.update(action.generates)
+        generated_names.update(action.generates)
+    max_resources = {resource: 100.0 for resource in resource_names}
+    initial_resources = {
+        resource: 0.0 if resource in generated_names else maximum
+        for resource, maximum in max_resources.items()
+    }
+    return max_resources, initial_resources
+
+
+def _target_count_for_encounter(encounter: str) -> int:
+    return 5 if "aoe" in encounter or "multi" in encounter else 1
 
 
 def _spec_summary(scope: BuildScope, role: str, top_builds: list[BuildReport], warnings: list[str]) -> dict[str, Any]:

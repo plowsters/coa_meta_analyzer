@@ -346,6 +346,38 @@ def _role_chips(spec: GuideSpec, *, tooltip_id: str = "") -> str:
 
 def _render_rotation_section(spec: GuideSpec) -> str:
     build = spec.builds[0] if spec.builds else None
+    guide = dict(build.rotation_guide or {}) if build else {}
+    if guide:
+        sections = []
+        quick_priority = [
+            *guide.get("priority_rules", []),
+            *guide.get("core_loop", []),
+        ]
+        sections.append(_render_guide_rule_list("Quick Priority", quick_priority))
+        sections.append(_render_guide_rule_list("Opener", guide.get("opener", [])))
+        sections.append(_render_guide_rule_list("Core Loop", guide.get("core_loop", [])))
+        sections.append(_render_guide_rule_list("Cooldowns", guide.get("cooldown_rules", [])))
+        sections.append(_render_guide_rule_list("Procs and Statuses", guide.get("proc_rules", [])))
+        role_rules = [
+            *guide.get("defensive_rules", []),
+            *guide.get("healing_rules", []),
+            *guide.get("support_rules", []),
+        ]
+        sections.append(_render_guide_rule_list("Role Tools", role_rules))
+        sections.append(_render_guide_rule_list("AoE Adjustments", guide.get("aoe_adjustments", [])))
+        reliability = guide.get("reliability")
+        summary = dict(guide.get("simulation_summary") or {})
+        if reliability:
+            sections.append(
+                f'<p><span class="chip">{_e(reliability)} rotation reliability</span> '
+                f'<span class="chip">{_e(str(summary.get("action_count", 0)))} simulated actions</span></p>'
+            )
+        warnings = guide.get("warnings") or []
+        if warnings:
+            sections.append(_render_loop_list("Rotation Warnings", warnings))
+        body = "".join(section for section in sections if section)
+        return f'<section class="panel" id="rotation"><h2>Rotation</h2>{body}</section>'
+
     loop = dict(build.rotation_loop or {}) if build else {}
     if not loop:
         return '<section class="panel" id="rotation"><h2>Rotation</h2><p>Use the generated priority notes as an early rotation scaffold.</p></section>'
@@ -364,6 +396,22 @@ def _render_rotation_section(spec: GuideSpec) -> str:
     if reliability:
         sections.append(f'<p><span class="chip">{_e(reliability)} rotation reliability</span></p>')
     return f'<section class="panel" id="rotation"><h2>Rotation</h2>{"".join(sections)}</section>'
+
+
+def _render_guide_rule_list(title: str, rules: Any) -> str:
+    values = [dict(rule) for rule in rules or [] if isinstance(rule, dict)]
+    if not values:
+        return ""
+    rows = []
+    for rule in values[:12]:
+        ability = str(rule.get("ability_name") or "Ability")
+        url = str(rule.get("db_url") or "")
+        label = f'<a href="{_e(url)}">{_e(ability)}</a>' if url else _e(ability)
+        text = str(rule.get("text") or f"Use {ability}.")
+        condition = str(rule.get("condition") or "")
+        condition_html = f' <span class="muted">({_e(condition)})</span>' if condition else ""
+        rows.append(f"<li><strong>{label}</strong>: {_e(text)}{condition_html}</li>")
+    return f"<h3>{_e(title)}</h3><ol>{''.join(rows)}</ol>"
 
 
 def _render_stats_section(spec: GuideSpec) -> str:
