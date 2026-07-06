@@ -210,6 +210,10 @@ Exit criteria:
 
 Status: planned.
 
+Detailed design: [M1.11F Exact Leveling Path and Build Diversity Correctness](2026-07-06-m1-11-f-leveling-path-build-diversity-design.md).
+
+Implementation plan: [M1.11F Exact Leveling Path and Build Diversity Correctness](../plans/2026-07-06-m1-11-f-leveling-path-build-diversity.md).
+
 Scope:
 
 - Generate exact talent/ability learn order from level 10 through 60.
@@ -231,20 +235,25 @@ Exit criteria:
 - Duplicate poison-DoT loop variants collapse into one recommendation unless a variant has a meaningfully different loop.
 - A stealth/burst build and a DoT loop build can both appear if both are competitive and reliable.
 
-### M1.11G: Calibration and Live-Meta Sanity Layer
+### M1.11G: Backend Verification and Trust Heuristic
 
 Status: planned; partly P2-gated.
 
+Detailed design: [M1.11G Backend Verification and Trust Heuristic](2026-07-06-m1-11-g-backend-trust-heuristic-design.md).
+
+Implementation plan: [M1.11G Backend Verification and Trust Heuristic](../plans/2026-07-06-m1-11-g-backend-trust-heuristic.md).
+
 Scope:
 
-- Add a curated live-meta sanity layer for known severe theory/live mismatches.
+- Add a backend-only trust heuristic for known severe theory/live mismatches and source-quality risk.
 - Track known examples: Runemaster DPS, Primalist DPS, Knight of Xoroth DPS, Felsworn, Cultist, Barbarian, and Venomancer relative ranking concerns.
 - Prepare AscensionLogs/addon compatibility for Phase 2 calibration.
 
 Exit criteria:
 
-- Reports can label when a result is "uncalibrated theorycraft" versus "calibrated by logs".
+- Backend sidecar artifacts can label when a result is uncalibrated theorycraft versus log-calibrated in future P2 data.
 - Confidence becomes sensitive to source completeness, role-map quality, mechanics coverage, simulation coverage, and empirical sample size.
+- The user-facing guide does not show backend trust/live-sanity scores in P1.
 - The system does not overfit anecdotal live rankings as hard truth without provenance.
 
 ## Non-Goals
