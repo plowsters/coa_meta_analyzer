@@ -94,7 +94,7 @@ This writes DB tooltip artifacts and an enriched entries file. AscensionDB enric
 
 M1.11 is the active Phase 1 hardening milestone. It corrects guide output where the M1.10 static site is useful but not yet faithful enough to the CoA Builder, intended roles, source assets, or rotation expectations. See [ROADMAP.md](ROADMAP.md), [M1.11 Design](superpowers/specs/2026-07-05-m1-11-report-correctness-data-parity-design.md), and [M1.11 Implementation Plan](superpowers/plans/2026-07-05-m1-11-report-correctness-data-parity.md).
 
-M1.11A quick fixes are implemented in the current repo:
+M1.11A quick fixes and M1.11B role/objective work are implemented in the current repo:
 
 - Main guide index role sections for Tank, Healer, Support, Caster DPS, Ranged DPS, and Melee DPS.
 - Multi-select role filters.
@@ -103,10 +103,12 @@ M1.11A quick fixes are implemented in the current repo:
 - Safe DB tooltip table rendering.
 - `ranged_dps` role support in report filters, stats, gear, and rotation wording.
 - Harvest and Soul Reaper curated as DPS specs.
+- Official launch-video class/spec role map with primary and secondary roles.
+- Role-specific objective index labels for damage, healing, survival/threat, and support while preserving `projected_dps_index` for compatibility.
+- Hybrid specs can appear in secondary-role guide sections.
 
-M1.11B-G remain planned:
+M1.11C-G remain planned:
 
-- Role-specific objective indexes for damage/healing/survival/support.
 - CoA Builder tree parity and separated AE/TE/passive tree rendering.
 - Cache-aware AscensionDB icon/image/item/effect scraping.
 - Exact level-by-level talent paths.
