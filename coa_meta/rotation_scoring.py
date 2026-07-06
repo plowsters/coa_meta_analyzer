@@ -19,6 +19,7 @@ class RotationScore:
     reliability: str
     breakdown: dict[str, float]
     warnings: tuple[str, ...] = tuple()
+    simulation_result: RotationSimulationResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +75,7 @@ def score_rotation_result(
         reliability=reliability,
         breakdown=breakdown,
         warnings=tuple(dict.fromkeys(warnings)),
+        simulation_result=result,
     )
 
 
