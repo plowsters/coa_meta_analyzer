@@ -78,6 +78,12 @@ def test_meta_report_exposes_guide_role_engine_role_and_provenance():
     assert by_spec["Support"]["engine_role"] == "healer_support"
     assert by_spec["Support"]["role_provenance"]["source"] == "curated"
     build = by_spec["Support"]["top_builds"][0]
+    assert build["projected_dps_index"] > 0
+    assert build["primary_index"] == build["projected_dps_index"]
+    assert build["primary_index_label"] == "Projected Healing Index"
+    assert build["objective_id"] == "healing"
+    assert build["objective_breakdown"]
+    assert build["alternate_objective_scores"] == {}
     assert build["provenance"]["engine_role"] == "healer_support"
     assert build["stat_priority_report"]["schema_version"] == "coa-stat-priority-v2"
     assert build["stat_priority_report"]["role"] == "healer"

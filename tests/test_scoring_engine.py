@@ -4,7 +4,7 @@ from coa_meta.builds import BuildConfig, BuildRules
 from coa_meta.domain import SelectedRank
 from coa_meta.profiles import load_builtin_profile
 from coa_meta.repository import TalentRepository
-from coa_meta.scoring import TheoryScorer
+from coa_meta.scoring import ScoreComponent, TheoryScorer
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "legal_build_fixture.jsonl"
@@ -50,3 +50,25 @@ def test_synergies_and_anti_synergies_are_explained():
 
     assert any(component.kind == "synergy" and component.reason == "test synergy" for component in scored.components)
     assert any(component.kind == "anti_synergy" and component.reason == "test anti" for component in scored.components)
+
+
+def test_role_objective_labels_and_hybrid_alternate_scores():
+    from coa_meta.objectives import objective_for_role
+
+    components = (
+        ScoreComponent(kind="tag", key="heal", value=4.0, reason="tag:heal"),
+        ScoreComponent(kind="school", key="nature", value=2.5, reason="school:nature"),
+    )
+
+    assert objective_for_role("melee_dps", 118.5, components).primary_index_label == "Projected Damage Index"
+    assert objective_for_role("ranged_dps", 118.5, components).primary_index_label == "Projected Damage Index"
+    assert objective_for_role("caster_dps", 118.5, components).primary_index_label == "Projected Damage Index"
+    assert objective_for_role("healer", 118.5, components).primary_index_label == "Projected Healing Index"
+    assert objective_for_role("tank", 118.5, components).primary_index_label == "Projected Survival/Threat Index"
+    assert objective_for_role("support", 118.5, components).primary_index_label == "Projected Support Index"
+
+    hybrid = objective_for_role("melee_dps", 118.5, components, secondary_roles=("support",))
+
+    assert hybrid.primary_index == 118.5
+    assert hybrid.objective_breakdown["tag:heal"] == 4.0
+    assert hybrid.alternate_objective_scores["support"]["primary_index_label"] == "Projected Support Index"

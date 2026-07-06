@@ -19,6 +19,7 @@ from .build_diversity import (
 from .builds import BuildConfig, BuildRules
 from .display_names import display_spec_name
 from .domain import TalentNode
+from .objectives import objective_for_role
 from .profiles import load_profile_by_role
 from .repository import TalentRepository
 from .roles import (
@@ -263,11 +264,24 @@ class BuildReport:
     selection_reason: dict[str, Any]
     rotation_loop: dict[str, Any]
     warnings: tuple[str, ...]
+    primary_index: float | None = None
+    primary_index_label: str = ""
+    objective_id: str = ""
+    objective_breakdown: dict[str, float] | None = None
+    alternate_objective_scores: dict[str, dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        primary_index = self.primary_index if self.primary_index is not None else self.projected_dps_index
         return {
             "rank": self.rank,
             "projected_dps_index": self.projected_dps_index,
+            "primary_index": primary_index,
+            "primary_index_label": self.primary_index_label or "Projected Damage Index",
+            "objective_id": self.objective_id or "damage",
+            "objective_breakdown": dict(self.objective_breakdown or {}),
+            "alternate_objective_scores": {
+                role: dict(payload) for role, payload in (self.alternate_objective_scores or {}).items()
+            },
             "confidence_label": self.confidence_label,
             "selected_nodes": list(self.selected_nodes),
             "score_breakdown": self.score_breakdown,
@@ -552,6 +566,12 @@ class MetaReportRunner:
                 engine_role=engine_role,
                 items=tuple(),
             ).to_dict()
+            objective = objective_for_role(
+                role,
+                scored.projected_dps_index,
+                scored.components,
+                secondary_roles=role_resolution.secondary_roles,
+            )
             selected_nodes = tuple(_node_to_report(repository.node_by_id(node_id)) for node_id in sorted(result.state.selected_ids))
             selection_reason = candidate.selection_reason
             top_builds.append(
@@ -581,6 +601,11 @@ class MetaReportRunner:
                     selection_reason=selection_reason.to_dict() if selection_reason else {},
                     rotation_loop=payload["rotation_loop"].to_dict(),
                     warnings=payload["warnings"],
+                    primary_index=objective.primary_index,
+                    primary_index_label=objective.primary_index_label,
+                    objective_id=objective.objective_id,
+                    objective_breakdown=objective.objective_breakdown,
+                    alternate_objective_scores=objective.alternate_objective_scores,
                 )
             )
         if not top_builds:
