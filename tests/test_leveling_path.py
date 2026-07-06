@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from coa_meta.builds import BuildConfig, BuildRules
+from coa_meta.domain import SelectedRank
 from coa_meta.domain import TalentNode
 from coa_meta.leveling_path import (
     LEVELING_PATH_SCHEMA_VERSION,
     LevelingPathStep,
     automatic_passive_steps,
+    build_leveling_path,
     essence_awards_for_levels,
     essence_kind_for_level,
 )
+from coa_meta.repository import TalentRepository
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_level_10_through_60_alternates_ae_then_te():
@@ -87,3 +95,52 @@ def test_automatic_passives_unlock_without_spending_essence():
             warnings=tuple(),
         ),
     )
+
+
+def test_leveling_path_reconstructs_selected_fixture_build():
+    repo = TalentRepository.from_entries(FIXTURES / "meta_report_fixture.jsonl")
+    selected_ids = (101, 201, 202)
+    selected_ranks = tuple(SelectedRank(node_id=node_id, rank=1) for node_id in selected_ids)
+    config = BuildConfig(class_name="Testclass", level=60, max_ae=26, max_te=25)
+    rules = BuildRules(repo, config)
+    target_state = rules.validate(list(selected_ranks)).state
+    assert target_state is not None
+
+    path = build_leveling_path(
+        repository=repo,
+        state=target_state,
+        class_name="Testclass",
+        spec_name="Damage",
+        build_id="fixture",
+        config=config,
+        role="caster_dps",
+    )
+
+    chosen_ids = [step.node_id for step in path.steps if step.event_type in {"choose_ability", "choose_talent"}]
+    assert 101 in chosen_ids
+    assert 201 in chosen_ids
+    assert 202 in chosen_ids
+    assert path.warnings == tuple()
+
+
+def test_leveling_path_records_deferred_awards_without_off_build_filler():
+    repo = TalentRepository.from_entries(FIXTURES / "meta_report_fixture.jsonl")
+    config = BuildConfig(class_name="Testclass", level=60, max_ae=26, max_te=25)
+    target_state = BuildRules(repo, config).validate([SelectedRank(201, 1), SelectedRank(202, 1)]).state
+    assert target_state is not None
+
+    path = build_leveling_path(
+        repository=repo,
+        state=target_state,
+        class_name="Testclass",
+        spec_name="Damage",
+        build_id="talent-only",
+        config=config,
+        role="caster_dps",
+    )
+
+    deferred = [step for step in path.steps if step.event_type == "deferred"]
+    chosen_ids = {step.node_id for step in path.steps if step.event_type in {"choose_ability", "choose_talent"}}
+    assert deferred
+    assert "leveling_path_deferred_essence" in deferred[0].warnings
+    assert 101 not in chosen_ids
