@@ -31,6 +31,7 @@ def test_engine_role_bridge_preserves_existing_profile_roles():
 def test_role_resolution_serializes_provenance():
     resolution = RoleResolution(
         role="caster_dps",
+        secondary_roles=("support",),
         engine_role="dps",
         source="inferred",
         confidence="medium",
@@ -42,6 +43,9 @@ def test_role_resolution_serializes_provenance():
 
     assert payload["schema_version"] == "coa-role-resolution-v1"
     assert payload["role"] == "caster_dps"
+    assert payload["primary_role"] == "caster_dps"
+    assert payload["secondary_roles"] == ["support"]
+    assert payload["roles"] == ["caster_dps", "support"]
     assert payload["engine_role"] == "dps"
     assert payload["evidence"] == ["spell_text:3"]
 
@@ -160,3 +164,25 @@ def test_official_spec_role_map_uses_source_and_display_spec_names():
     assert crusader is not None
     assert crusader.primary_role == "melee_dps"
     assert crusader.confidence == "high"
+
+
+def test_role_resolution_uses_official_role_map_secondary_roles():
+    repo = TalentRepository.from_entries(FIXTURES / "meta_report_fixture.jsonl")
+    scope = BuildScope(
+        class_name="Guardian",
+        spec_id=18,
+        spec_name="Inspiration",
+        level=60,
+        encounter_profile_id="baseline_single_target",
+        search_profile_id="default",
+        scoring_profile_id="auto",
+        apl_profile_id="auto",
+        top=1,
+    )
+
+    resolution = resolve_spec_role(repo, scope)
+
+    assert resolution.role == "melee_dps"
+    assert resolution.secondary_roles == ("support",)
+    assert resolution.roles == ("melee_dps", "support")
+    assert resolution.source == "authoritative_video"

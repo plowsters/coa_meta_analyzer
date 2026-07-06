@@ -245,14 +245,23 @@ class GuideSpec:
     nodes: tuple[GuideNode, ...]
     warnings: tuple[str, ...]
     role_provenance: dict[str, Any] | None = None
+    primary_role: str = ""
+    secondary_roles: tuple[str, ...] = tuple()
+    roles: tuple[str, ...] = tuple()
 
     def to_dict(self) -> dict[str, Any]:
+        primary_role = self.primary_role or self.role
+        secondary_roles = self.secondary_roles
+        roles = self.roles or tuple(dict.fromkeys((primary_role, *secondary_roles)))
         return {
             "slug": self.slug,
             "href": self.href,
             "class_name": self.class_name,
             "spec_name": self.spec_name,
             "role": self.role,
+            "primary_role": primary_role,
+            "secondary_roles": list(secondary_roles),
+            "roles": list(roles),
             "confidence_label": self.confidence_label,
             "warning_count": self.warning_count,
             "summary": self.summary,

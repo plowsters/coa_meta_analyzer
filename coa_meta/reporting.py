@@ -303,15 +303,24 @@ class SpecResult:
     summary: dict[str, Any]
     top_builds: tuple[BuildReport, ...]
     warnings: tuple[str, ...]
+    primary_role: str = ""
+    secondary_roles: tuple[str, ...] = tuple()
+    roles: tuple[str, ...] = tuple()
 
     def to_dict(self) -> dict[str, Any]:
         display_name = display_spec_name(self.class_name, self.spec_name)
+        primary_role = self.primary_role or self.role
+        secondary_roles = self.secondary_roles
+        roles = self.roles or tuple(dict.fromkeys((primary_role, *secondary_roles)))
         return {
             "class_name": self.class_name,
             "spec_id": self.spec_id,
             "spec_name": display_name,
             "source_spec_name": self.spec_name,
             "role": self.role,
+            "primary_role": primary_role,
+            "secondary_roles": list(secondary_roles),
+            "roles": list(roles),
             "engine_role": self.engine_role,
             "role_provenance": self.role_provenance,
             "level": self.level,
@@ -591,6 +600,9 @@ class MetaReportRunner:
             summary=_spec_summary(scope, role, top_builds, warnings),
             top_builds=tuple(top_builds),
             warnings=tuple(warnings),
+            primary_role=role_resolution.role,
+            secondary_roles=role_resolution.secondary_roles,
+            roles=role_resolution.roles,
         )
 
 

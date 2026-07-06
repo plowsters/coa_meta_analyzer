@@ -66,11 +66,23 @@ class RoleResolution:
     confidence: str
     evidence: tuple[str, ...]
     scores: dict[str, float]
+    secondary_roles: tuple[GuideRole, ...] = tuple()
+
+    @property
+    def roles(self) -> tuple[GuideRole, ...]:
+        roles: list[GuideRole] = [self.role]
+        for role in self.secondary_roles:
+            if role not in roles:
+                roles.append(role)
+        return tuple(roles)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": "coa-role-resolution-v1",
             "role": self.role,
+            "primary_role": self.role,
+            "secondary_roles": list(self.secondary_roles),
+            "roles": list(self.roles),
             "engine_role": self.engine_role,
             "source": self.source,
             "confidence": self.confidence,
@@ -122,6 +134,7 @@ def resolve_spec_role(repository: TalentRepository, scope: Any) -> RoleResolutio
             confidence=spec_role.confidence,
             evidence=spec_role.evidence,
             scores={role: 100.0, **{secondary: 80.0 for secondary in spec_role.secondary_roles}},
+            secondary_roles=spec_role.secondary_roles,
         )
     override = _override_for(scope.class_name, scope.spec_name, scope.spec_key)
     if override:

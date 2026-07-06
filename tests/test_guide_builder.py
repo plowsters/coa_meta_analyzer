@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from coa_meta.guide_builder import build_guide_site
+from coa_meta.guide_models import GuideSpec
 from coa_meta.reporting import MetaReportRunner, MetaRunConfig
 
 
@@ -85,3 +86,31 @@ def test_guide_specs_include_role_provenance():
 
     assert support.role == "healer"
     assert support.role_provenance["source"] == "curated"
+
+
+def test_guide_spec_serializes_primary_and_secondary_roles():
+    spec = GuideSpec(
+        slug="guardian-inspiration",
+        href="specs/guardian-inspiration.html",
+        class_name="Guardian",
+        spec_name="Inspiration",
+        role="melee_dps",
+        primary_role="melee_dps",
+        secondary_roles=("support",),
+        roles=("melee_dps", "support"),
+        confidence_label="high",
+        warning_count=0,
+        summary="Hybrid role guide.",
+        sections=("Overview",),
+        builds=tuple(),
+        nodes=tuple(),
+        warnings=tuple(),
+        role_provenance={"source": "authoritative_video"},
+    )
+
+    payload = spec.to_dict()
+
+    assert payload["role"] == "melee_dps"
+    assert payload["primary_role"] == "melee_dps"
+    assert payload["secondary_roles"] == ["support"]
+    assert payload["roles"] == ["melee_dps", "support"]
