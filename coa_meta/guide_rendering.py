@@ -51,13 +51,22 @@ a { color: var(--fel); }
 .tree-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
 .tree-toolbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; }
 .tree-scroll { overflow-x: auto; padding-bottom: 8px; }
+.tree-build-panel[hidden] { display: none; }
+.tree-groups { display: grid; gap: 18px; min-width: max-content; }
+.tree-group, .passive-lane { min-width: max-content; }
+.tree-group h3, .passive-lane h3 { margin: 0 0 8px; color: var(--fel); }
 .talent-tree { position: relative; display: grid; grid-template-columns: repeat(var(--tree-cols), 72px); grid-template-rows: repeat(var(--tree-rows), 72px); gap: 22px; min-width: max-content; padding: 18px; border: 1px solid rgba(143,92,255,.28); border-radius: 8px; background: radial-gradient(circle at center, rgba(143,92,255,.10), rgba(9,5,15,.45)); }
+.talent-tree.is-captured-layout { display: block; min-width: var(--tree-width); height: var(--tree-height); }
 .talent-tree[hidden] { display: none; }
+.passive-lane .talent-tree { display: flex; gap: 24px; align-items: center; min-height: 112px; }
+.passive-lane .talent-tree.is-captured-layout { display: block; }
 .tree-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .tree-links line { stroke: rgba(143,92,255,.45); stroke-width: 3; filter: drop-shadow(0 0 5px rgba(143,92,255,.35)); }
 .tree-links line.is-selected { stroke: var(--fel); filter: drop-shadow(0 0 7px rgba(101,240,107,.55)); }
 .tree-links line.is-available { stroke: var(--void); }
 .tree-node { position: relative; z-index: 1; width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid rgba(143,92,255,.5); border-radius: 50%; color: var(--text); background: rgba(19,11,30,.94); box-shadow: inset 0 0 16px rgba(143,92,255,.16); cursor: help; }
+.is-captured-layout .tree-node { position: absolute; }
+.passive-lane .tree-node { border-radius: 12px; }
 .tree-node.shape-square { border-radius: 12px; }
 .tree-node.shape-hex { clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
 .tree-node.is-selected { border-color: var(--fel); box-shadow: 0 0 18px rgba(101,240,107,.42), inset 0 0 18px rgba(101,240,107,.16); }
@@ -128,7 +137,8 @@ GUIDE_JS = """
       allButton.classList.toggle("is-active", allSelected);
     }
     document.querySelectorAll("[data-role]").forEach(card => {
-      card.hidden = !selectedRoles.has(card.getAttribute("data-role"));
+      const roles = (card.getAttribute("data-role") || "").split(/\\s+/).filter(Boolean);
+      card.hidden = !roles.some(role => selectedRoles.has(role));
     });
     document.querySelectorAll("[data-role-section]").forEach(section => {
       section.hidden = !selectedRoles.has(section.getAttribute("data-role-section"));
@@ -168,11 +178,12 @@ GUIDE_JS = """
     const svg = tree.querySelector(".tree-links");
     if (!svg) return;
     const edges = parseJson(svg.getAttribute("data-tree-edges"), []);
-    const treeRect = tree.getBoundingClientRect();
+    const canvas = svg.closest(".talent-tree") || tree;
+    const treeRect = canvas.getBoundingClientRect();
     svg.innerHTML = "";
     edges.forEach(edge => {
-      const source = tree.querySelector(`[data-tree-node-id="${edge.source_id}"]`);
-      const target = tree.querySelector(`[data-tree-node-id="${edge.target_id}"]`);
+      const source = canvas.querySelector(`[data-tree-node-id="${edge.source_id}"]`);
+      const target = canvas.querySelector(`[data-tree-node-id="${edge.target_id}"]`);
       if (!source || !target) return;
       const a = source.getBoundingClientRect();
       const b = target.getBoundingClientRect();
@@ -189,22 +200,24 @@ GUIDE_JS = """
     document.querySelectorAll("[data-guide-tree-panel]").forEach(panel => {
       const buildSelector = panel.querySelector("[data-tree-build-selector]");
       const levelSelector = panel.querySelector("[data-tree-level-selector]");
-      function currentTree() {
-        const id = buildSelector ? buildSelector.value : panel.querySelector(".talent-tree")?.getAttribute("data-tree-id");
-        return panel.querySelector(`.talent-tree[data-tree-id="${id}"]`) || panel.querySelector(".talent-tree");
+      function currentBuildPanel() {
+        const id = buildSelector ? buildSelector.value : panel.querySelector("[data-tree-build-panel]")?.getAttribute("data-tree-build-panel");
+        return panel.querySelector(`[data-tree-build-panel="${id}"]`) || panel.querySelector("[data-tree-build-panel]");
       }
       function refresh() {
-        panel.querySelectorAll(".talent-tree").forEach(tree => { tree.hidden = tree !== currentTree(); });
-        const tree = currentTree();
-        if (!tree) return;
-        applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+        const activePanel = currentBuildPanel();
+        panel.querySelectorAll("[data-tree-build-panel]").forEach(buildPanel => { buildPanel.hidden = buildPanel !== activePanel; });
+        if (!activePanel) return;
+        activePanel.querySelectorAll("[data-tree-kind]").forEach(tree => {
+          applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+        });
       }
       if (buildSelector) buildSelector.addEventListener("change", refresh);
       if (levelSelector) levelSelector.addEventListener("change", refresh);
       refresh();
     });
   }
-  window.addEventListener("resize", () => document.querySelectorAll(".talent-tree").forEach(drawTreeLinks));
+  window.addEventListener("resize", () => document.querySelectorAll("[data-tree-kind]").forEach(drawTreeLinks));
   document.addEventListener("DOMContentLoaded", initTrees);
 })();
 """
@@ -413,26 +426,32 @@ def _render_loop_list(title: str, items: Any) -> str:
 
 
 def _render_talent_tree_section(spec: GuideSpec) -> str:
-    tree_builds = [build for build in spec.builds if build.tree]
+    tree_builds = [build for build in spec.builds if build.tree_panel or build.tree]
     if not tree_builds:
         return '<section class="panel" id="talents"><h2>Talents</h2><p>No talent tree data is available for this build.</p></section>'
-    first_tree = tree_builds[0].tree
+    first_panel = tree_builds[0].tree_panel
+    first_tree = _first_panel_tree(first_panel) if first_panel else tree_builds[0].tree
     assert first_tree is not None
     build_options = "".join(
-        f'<option value="{_e(build.tree.tree_id if build.tree else "")}">{_e(build.label)}</option>'
+        f'<option value="{_e(_build_tree_panel_id(build))}">{_e(build.label)}</option>'
         for build in tree_builds
     )
-    levels = sorted({snapshot.level for build in tree_builds if build.tree for snapshot in build.tree.snapshots})
+    levels = sorted(
+        {
+            snapshot.level
+            for build in tree_builds
+            for snapshot in _build_tree_snapshots(build)
+        }
+    )
     level_options = "".join(
         f'<option value="{level}"{" selected" if level == first_tree.level else ""}>Level {level}</option>'
         for level in levels
     )
-    trees = "".join(
-        _render_tree(build.tree, hidden=index > 0)
+    panels = "".join(
+        _render_build_tree_panel(build, hidden=index > 0)
         for index, build in enumerate(tree_builds)
-        if build.tree
     )
-    leveling_path = _render_leveling_path(first_tree)
+    leveling_path = _render_leveling_path(first_panel or first_tree)
     return (
         '<section class="panel" id="talents" data-guide-tree-panel>'
         "<h2>Talents</h2>"
@@ -441,20 +460,87 @@ def _render_talent_tree_section(spec: GuideSpec) -> str:
         f'<label>Level <select data-tree-level-selector>{level_options}</select></label>'
         f'<span class="chip" data-tree-budget-summary>AE {first_tree.ae_spent}/{first_tree.max_ae} - TE {first_tree.te_spent}/{first_tree.max_te}</span>'
         "</div>"
-        f'<div class="tree-scroll">{trees}</div>'
+        f'<div class="tree-scroll">{panels}</div>'
         f"{leveling_path}"
         "</section>"
     )
 
 
-def _render_tree(tree: Any, *, hidden: bool) -> str:
-    edges = _json_attr([edge.to_dict() for edge in tree.edges])
-    snapshots = _json_attr([snapshot.to_dict() for snapshot in tree.snapshots])
-    nodes = "".join(_render_tree_node(node) for node in tree.nodes)
+def _build_tree_panel_id(build: Any) -> str:
+    if build.tree_panel:
+        return build.tree_panel.tree_panel_id
+    if build.tree:
+        return build.tree.tree_id
+    return ""
+
+
+def _build_tree_snapshots(build: Any) -> tuple[Any, ...]:
+    if build.tree_panel:
+        return tuple(build.tree_panel.snapshots)
+    if build.tree:
+        return tuple(build.tree.snapshots)
+    return tuple()
+
+
+def _first_panel_tree(panel: Any) -> Any:
+    for tree in panel.trees:
+        if tree.nodes:
+            return tree
+    return panel.trees[0] if panel.trees else None
+
+
+def _render_build_tree_panel(build: Any, *, hidden: bool) -> str:
+    if build.tree_panel:
+        groups = "".join(_render_tree_group(tree) for tree in build.tree_panel.trees)
+        warnings = "".join(f"<li>{_e(warning)}</li>" for warning in build.tree_panel.warnings)
+        warning_html = f'<div class="section-note"><ul>{warnings}</ul></div>' if warnings else ""
+        return (
+            f'<div class="tree-build-panel" data-tree-build-panel="{_e(build.tree_panel.tree_panel_id)}"'
+            f'{" hidden" if hidden else ""}>'
+            f'<div class="tree-groups">{groups}</div>{warning_html}</div>'
+        )
+    if build.tree:
+        return (
+            f'<div class="tree-build-panel" data-tree-build-panel="{_e(build.tree.tree_id)}"'
+            f'{" hidden" if hidden else ""}>'
+            f'{_render_tree(build.tree, hidden=False)}</div>'
+        )
+    return ""
+
+
+def _render_tree_group(tree: Any) -> str:
+    group_class = "passive-lane" if tree.tree_kind == "level_passives" else "tree-group"
     return (
-        f'<div class="talent-tree" data-tree-id="{_e(tree.tree_id)}" data-tree-level="{tree.level}" '
-        f'data-tree-snapshots="{snapshots}" style="--tree-cols: {tree.cols}; --tree-rows: {tree.rows}"'
-        f'{" hidden" if hidden else ""}>'
+        f'<div class="{group_class}" data-tree-kind="{_e(tree.tree_kind)}" data-tree-id="{_e(tree.tree_id)}" '
+        f'data-tree-level="{tree.level}" data-tree-snapshots="{_json_attr([snapshot.to_dict() for snapshot in tree.snapshots])}">'
+        f'<h3>{_e(_tree_group_label(tree.tree_kind))}</h3>'
+        f'{_render_tree_canvas(tree)}</div>'
+    )
+
+
+def _render_tree(tree: Any, *, hidden: bool) -> str:
+    group = (
+        f'<div class="tree-group" data-tree-kind="{_e(tree.tree_kind)}" data-tree-id="{_e(tree.tree_id)}" '
+        f'data-tree-level="{tree.level}" data-tree-snapshots="{_json_attr([snapshot.to_dict() for snapshot in tree.snapshots])}">'
+        f'{_render_tree_canvas(tree)}</div>'
+    )
+    return f'<div class="legacy-tree-wrapper"{" hidden" if hidden else ""}>{group}</div>'
+
+
+def _render_tree_canvas(tree: Any) -> str:
+    edges = _json_attr([edge.to_dict() for edge in tree.edges])
+    nodes = "".join(_render_tree_node(node) for node in tree.nodes)
+    captured = bool(tree.bounds)
+    if captured:
+        width = int(float(tree.bounds.get("width", 0) or max((node.x or 0) + (node.width or 64) for node in tree.nodes)))
+        height = int(float(tree.bounds.get("height", 0) or max((node.y or 0) + (node.height or 64) for node in tree.nodes)))
+        style = f"--tree-width: {width}px; --tree-height: {height}px"
+        css_class = "talent-tree is-captured-layout"
+    else:
+        style = f"--tree-cols: {tree.cols}; --tree-rows: {tree.rows}"
+        css_class = "talent-tree"
+    return (
+        f'<div class="{css_class}" style="{style}">'
         f'<svg class="tree-links" data-tree-edges="{edges}" aria-hidden="true"></svg>'
         f"{nodes}</div>"
     )
@@ -465,19 +551,42 @@ def _render_tree_node(node: Any) -> str:
     state_class = _tree_state_class(node.tree_state)
     label = node.name[:2].upper()
     rank = f"{node.rank}/{node.max_rank}" if node.max_rank > 1 else str(node.rank or 1)
+    style = _tree_node_style(node)
     return (
         f'<button class="tree-node {shape} {state_class}" data-tree-node-id="{node.entry_id}" '
         f'data-tooltip-id="{_e(node.tooltip_id)}" data-state="{_e(node.tree_state)}" '
         f'data-rank="{node.rank}" data-max-rank="{node.max_rank}" '
-        f'style="grid-column: {node.col + 1 if node.col is not None else 1}; grid-row: {node.row + 1 if node.row is not None else 1}" '
+        f'style="{style}" '
         f'aria-label="{_e(node.name)}">'
         f'<span>{_e(label)}</span><span class="tree-rank">{_e(rank)}</span></button>'
     )
 
 
-def _render_leveling_path(tree: Any) -> str:
+def _tree_node_style(node: Any) -> str:
+    if node.x is not None and node.y is not None:
+        width = node.width if node.width is not None else 64
+        height = node.height if node.height is not None else 64
+        return f"left: {node.x}px; top: {node.y}px; width: {width}px; height: {height}px"
+    return f"grid-column: {node.col + 1 if node.col is not None else 1}; grid-row: {node.row + 1 if node.row is not None else 1}"
+
+
+def _tree_group_label(tree_kind: str) -> str:
+    labels = {
+        "ability_essence": "Ability Essence",
+        "talent_essence": "Talent Essence",
+        "level_passives": "Level Passives",
+        "combined": "Talent Tree",
+    }
+    return labels.get(tree_kind, tree_kind.replace("_", " ").title())
+
+
+def _render_leveling_path(tree_or_panel: Any) -> str:
+    if hasattr(tree_or_panel, "trees"):
+        candidate_nodes = [node for tree in tree_or_panel.trees for node in tree.nodes]
+    else:
+        candidate_nodes = list(tree_or_panel.nodes)
     selected = sorted(
-        (node for node in tree.nodes if node.selected or node.free),
+        (node for node in candidate_nodes if node.selected or node.free),
         key=lambda item: (item.required_level, item.row or 0, item.col or 0, item.name),
     )
     if not selected:

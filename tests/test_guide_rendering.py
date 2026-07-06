@@ -144,6 +144,19 @@ def test_render_spec_html_includes_static_talent_tree():
     assert "TE" in html
 
 
+def test_render_spec_html_includes_separate_tree_groups_and_passive_lane():
+    site = _site()
+    spec = next(item for item in site.specs if item.spec_name == "Damage")
+
+    html = render_spec_html(site, spec)
+
+    assert 'data-tree-kind="ability_essence"' in html
+    assert 'data-tree-kind="talent_essence"' in html
+    assert 'data-tree-kind="level_passives"' in html
+    assert 'class="passive-lane"' in html
+    assert 'data-tooltip-id="spell:2001"' in html
+
+
 def test_spec_html_renders_build_playstyle_and_core_loop():
     site = _site()
     spec = next(item for item in site.specs if item.spec_name == "Damage")
@@ -187,6 +200,15 @@ def test_static_tree_javascript_has_no_network_calls():
     assert "fetch(" not in GUIDE_JS
     assert "XMLHttpRequest" not in GUIDE_JS
     assert "getBoundingClientRect" in GUIDE_JS
+    assert 'querySelectorAll("[data-tree-kind]")' in GUIDE_JS
+
+
+def test_tree_css_keeps_desktop_geometry_and_horizontal_scroll():
+    assert ".tree-scroll { overflow-x: auto" in GUIDE_CSS
+    media_block = GUIDE_CSS.split("@media", 1)[1]
+    assert "talent-tree" not in media_block
+    assert "tree-group" not in media_block
+    assert "passive-lane" not in media_block
 
 
 def test_index_cards_do_not_surface_recommendation_confidence_badges():
