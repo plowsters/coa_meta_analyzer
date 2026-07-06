@@ -184,7 +184,11 @@ def test_tooltip_sanitizer_preserves_tables_and_strips_active_markup():
     assert "<td>Damage</td>" in sanitized
     assert "onclick" not in sanitized
     assert "script" not in sanitized
-    assert "&lt;img" in sanitized
+    # Disallowed active markup is stripped entirely, not escaped into visible
+    # literal text (which surfaced raw HTML in tooltips).
+    assert "<img" not in sanitized
+    assert "&lt;img" not in sanitized
+    assert "onerror" not in sanitized
 
 
 def test_render_spec_html_includes_static_talent_tree():

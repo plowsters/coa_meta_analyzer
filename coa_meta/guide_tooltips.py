@@ -92,7 +92,10 @@ def sanitize_tooltip_html(value: str) -> str:
     def replace_tag(match: re.Match[str]) -> str:
         slash, tag_name, attrs = match.group(1), match.group(2).lower(), match.group(3) or ""
         if tag_name not in _ALLOWED_TAGS:
-            return html.escape(match.group(0))
+            # Drop unknown/disallowed markup (e.g. AscensionDB <ins>/<del>/<a> icon and
+            # spell-link tags, and <UNK>/<scalingbp> scaling placeholders) rather than
+            # escaping it, which would surface raw HTML as literal tooltip text.
+            return ""
         if slash:
             return f"</{tag_name}>"
         if tag_name == "span":

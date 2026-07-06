@@ -67,3 +67,36 @@ def test_sanitize_tooltip_html_preserves_db_tables_without_event_attributes():
     assert "<th>Effect</th>" in html
     assert "<td>Deals <strong>Nature</strong> damage.</td>" in html
     assert "onclick" not in html
+
+
+def test_sanitize_tooltip_html_strips_disallowed_inline_tags_to_readable_text():
+    raw = (
+        "Javelin Toss now lodges into enemies."
+        "<span class='iconsmall'>"
+        "<ins style='background-image: url(\"https://db.ascension.gg/x.jpg\");'></ins>"
+        "<del></del></span>"
+        "<a style='color: white !important' href='?spell=802591'> Lodged Spear </a>"
+    )
+
+    out = sanitize_tooltip_html(raw)
+
+    assert "Lodged Spear" in out  # inner link text preserved
+    assert "&lt;" not in out  # nothing rendered as literal markup
+    assert "<ins" not in out  # disallowed tags stripped, not escaped
+    assert "<del" not in out
+    assert "<a" not in out
+    assert "background-image" not in out  # disallowed-tag attributes dropped
+    assert "href" not in out
+    assert '<span class="iconsmall">' in out  # allowed span preserved
+
+
+def test_sanitize_tooltip_html_strips_ascensiondb_placeholder_pseudo_tags():
+    out = sanitize_tooltip_html(
+        "Deals 4+<UNK: $ppl1> Plague damage and 437*$<scalingbp> Frost damage."
+    )
+
+    assert "&lt;" not in out
+    assert "UNK" not in out
+    assert "scalingbp" not in out
+    assert "Plague damage" in out
+    assert "Frost damage" in out
