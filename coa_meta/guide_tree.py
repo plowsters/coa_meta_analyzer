@@ -5,7 +5,7 @@ from typing import Mapping
 
 from .builds import BuildConfig, BuildRules
 from .domain import SelectedRank, TalentNode, ValidationIssue
-from .guide_models import GuideAsset, GuideNode, GuideNodeGate, GuideTree, GuideTreeEdge, GuideTreeSnapshot
+from .guide_models import GuideAsset, GuideNode, GuideNodeGate, GuideTree, GuideTreeEdge, GuideTreePanel, GuideTreeSnapshot
 from .guide_tooltips import ascension_spell_url
 from .repository import TalentRepository
 
@@ -106,6 +106,81 @@ def build_guide_tree(
         snapshots=snapshots,
         warnings=tuple(dict.fromkeys(warnings)),
     )
+
+
+def build_guide_tree_panel(
+    *,
+    repository: TalentRepository,
+    class_name: str,
+    source_spec_name: str,
+    display_spec_name: str,
+    build_rank: int,
+    build_label: str,
+    selected_node_ids: tuple[int, ...],
+    config: BuildConfig,
+    spec_nodes: tuple[TalentNode, ...],
+    levels: tuple[int, ...] | None = None,
+    guide_nodes_by_id: Mapping[int, GuideNode] | None = None,
+) -> GuideTreePanel:
+    combined = build_guide_tree(
+        repository=repository,
+        class_name=class_name,
+        spec_name=source_spec_name,
+        build_rank=build_rank,
+        build_label=build_label,
+        selected_node_ids=selected_node_ids,
+        config=config,
+        spec_nodes=spec_nodes,
+        levels=levels,
+        guide_nodes_by_id=guide_nodes_by_id,
+    )
+    trees = tuple(_split_tree_group(combined, tree_kind) for tree_kind in _TREE_GROUP_ORDER)
+    return GuideTreePanel(
+        tree_panel_id=combined.tree_id,
+        class_name=class_name,
+        source_spec_name=source_spec_name,
+        display_spec_name=display_spec_name,
+        build_rank=build_rank,
+        build_label=build_label,
+        level=config.level,
+        max_ae=config.max_ae,
+        max_te=config.max_te,
+        trees=trees,
+        snapshots=combined.snapshots,
+        warnings=combined.warnings,
+    )
+
+
+_TREE_GROUP_ORDER = ("ability_essence", "talent_essence", "level_passives")
+
+
+def _split_tree_group(tree: GuideTree, tree_kind: str) -> GuideTree:
+    nodes = tuple(node for node in tree.nodes if _tree_kind_for_node(node) == tree_kind)
+    node_ids = {node.entry_id for node in nodes}
+    edges = tuple(edge for edge in tree.edges if edge.source_id in node_ids and edge.target_id in node_ids)
+    rows = max((node.row or 0 for node in nodes), default=0) + 1
+    cols = max((node.col or 0 for node in nodes), default=0) + 1
+    return replace(
+        tree,
+        tree_id=f"{tree.tree_id}-{tree_kind}",
+        tree_kind=tree_kind,
+        layout_source="normalized_fallback",
+        bounds=None,
+        rows=rows,
+        cols=cols,
+        nodes=nodes,
+        edges=edges,
+    )
+
+
+def _tree_kind_for_node(node: GuideNode) -> str:
+    if node.ae_cost == 0 and node.te_cost == 0:
+        return "level_passives"
+    if node.essence_kind == "ability" or node.ae_cost > 0:
+        return "ability_essence"
+    if node.essence_kind == "talent" or node.te_cost > 0:
+        return "talent_essence"
+    return "level_passives"
 
 
 def classify_node_state(
