@@ -155,7 +155,9 @@ Exit criteria:
 
 ### M1.11D: AscensionDB Asset and Canonical Data Scraper
 
-Status: planned.
+Status: designed and ready for implementation.
+
+Detailed design: [M1.11D AscensionDB Asset and Canonical Data Cache](2026-07-06-m1-11-d-ascensiondb-asset-cache-design.md).
 
 Scope:
 
@@ -180,7 +182,9 @@ Exit criteria:
 
 ### M1.11E: Rotation Simulation and Guide-Ready Priority Output
 
-Status: planned.
+Status: designed and ready for implementation.
+
+Detailed design: [M1.11E Rotation Simulation and Guide-Ready Priority Output](2026-07-06-m1-11-e-rotation-simulation-guide-output-design.md).
 
 Scope:
 

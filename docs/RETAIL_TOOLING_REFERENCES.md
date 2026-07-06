@@ -16,6 +16,7 @@ Relevant patterns:
 - Event-driven simulator rather than closed-form stat calculator.
 - Separate engine, class modules, data extraction, profiles, APLs, reports, and CLI.
 - APLs are priority lists scanned from top to bottom until an available action is found.
+- Additional action lists can be used as named sub-priorities for cooldowns, openers, and behavior branches.
 - Generated APL text is treated as output from source modules and is not manually edited in place.
 - Reports and profiles are reproducible text artifacts.
 
@@ -23,12 +24,14 @@ How to apply to CoA:
 
 - Use SimC's APL concept, not necessarily SimC code.
 - Keep generated APLs editable and serializable.
+- Execute CoA APL candidates through the local clean-room simulator before turning them into guide rotations.
 - Keep simulator logic separate from build legality.
 - Add report provenance and assumptions to every run.
 
 License note:
 
 - SimulationCraft is GPL-3.0 with additional bundled licenses. Copying source code requires a deliberate compatibility decision.
+- M1.11E should remain clean-room: use priority-list and event-simulation concepts, not SimC source code, class modules, or generated APLs.
 
 ## SimulationCraft Addon
 
@@ -89,10 +92,30 @@ How to apply to CoA:
 - Phase 2 and Phase 4 should borrow the concept of analyzers that turn logs into actionable suggestions.
 - Keep log metrics separate from theory and simulation models.
 - Use per-spec analyzers only after generic event metrics exist.
+- For M1.11E, use the analyzer pattern of converting raw events into actionable guide feedback, but do not copy AGPL implementation code.
 
 License note:
 
 - WoWAnalyzer is AGPL-3.0. Copying source code can impose strong source-sharing obligations, including for networked use.
+
+## HTTP Cache Validation
+
+Links:
+
+- RFC 9110 HTTP Semantics: <https://www.rfc-editor.org/rfc/rfc9110.html>
+- MDN HTTP conditional requests: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Conditional_requests>
+
+Relevant patterns:
+
+- `ETag` and `Last-Modified` validators let clients avoid transferring unchanged resources.
+- `If-None-Match` and `If-Modified-Since` enable conditional refreshes.
+- `304 Not Modified` means the local cached representation can be reused.
+
+How to apply to CoA:
+
+- M1.11D should cache AscensionDB power payloads, icon assets, and parsed rows.
+- Use HTTP validators when available and SHA-256 content/parsed hashes as a fallback.
+- Keep conservative stale-age defaults and bounded concurrency to avoid unnecessary load on Project Ascension resources.
 
 ## Retail Class Guide Sites
 

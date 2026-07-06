@@ -283,6 +283,8 @@ git commit -m "Add CoA builder tree parity layout support"
 
 Purpose: add icons/images and richer DB records without hammering AscensionDB.
 
+Detailed execution plan: [M1.11D AscensionDB Asset and Canonical Data Cache](2026-07-06-m1-11-d-ascensiondb-asset-cache.md). The checklist below is retained as the umbrella summary; use the dedicated M1.11D plan for implementation.
+
 ### Step 1: Add cache manifest tests
 
 Create tests under `coa_scraper/test/` or the existing Node test location:
@@ -447,6 +449,8 @@ git commit -m "Generate exact level-by-level build paths"
 ## Checkpoint 6: Rotation Simulation and Guide Output
 
 Purpose: move from category summaries to compact guide-ready rotations.
+
+Detailed execution plan: [M1.11E Rotation Simulation and Guide-Ready Priority Output](2026-07-06-m1-11-e-rotation-simulation-guide-output.md). The checklist below is retained as the umbrella summary; use the dedicated M1.11E plan for implementation.
 
 ### Step 1: Add rotation candidate tests
 
