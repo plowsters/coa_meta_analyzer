@@ -59,6 +59,7 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 - `playstyle_fingerprint`
 - `selection_reason`
 - `rotation_loop`
+- `rotation_guide`
 - `warnings`
 
 `projected_dps_index` is a theorycraft index. It is not raw DPS, simulated DPS, observed DPS, or empirical DPS.
@@ -72,13 +73,15 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 
 `objective_id` is one of `damage`, `healing`, `survival_threat`, or `support`. `objective_breakdown` groups score components by source key. `alternate_objective_scores` contains secondary-role payloads for hybrid specs.
 
-`rotation_summary` remains for backwards compatibility. New guide rendering should prefer `rotation_loop` when present.
+`rotation_summary` remains for backwards compatibility. Guide rendering should prefer `rotation_guide` when present, then `rotation_loop`, then `rotation_summary`.
 
 `playstyle_fingerprint` has schema version `coa-build-playstyle-v1` and summarizes selected node tags, active abilities, resources, schools, APL categories, and role cues for build comparison.
 
 `selection_reason` has schema version `coa-build-selection-v1` and explains why the build was selected for the guide, including performance band, reliability label, diversity label, and comparison to the first selected build.
 
 `rotation_loop` has schema version `coa-rotation-loop-v1` and provides player-facing objective, opener, core loop, cooldown, role-specific, resource, maintenance, and reliability notes derived from the generated APL.
+
+`rotation_guide` has schema version `coa-rotation-guide-v1` and is the M1.11E guide-ready rotation payload. It contains opener, core loop, priority, cooldown, proc, defensive, healing, support, AoE, movement, action-usage, simulation-summary, reliability, and warning sections. See [Rotation Guide Schema](rotation-guide-schema.md).
 
 ## Role Resolution
 
