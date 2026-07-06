@@ -8,7 +8,10 @@ from coa_meta.roles import (
     GUIDE_ROLES,
     RoleResolution,
     engine_role_for_guide_role,
+    load_spec_role_records,
+    resolve_spec_role_record,
     resolve_spec_role,
+    roles_for_filter,
 )
 
 
@@ -97,4 +100,63 @@ def test_curated_reaper_overrides_keep_harvest_and_soul_as_dps():
     )
 
     assert harvest.role == "melee_dps"
-    assert soul.role == "caster_dps"
+    assert soul.role == "melee_dps"
+
+
+def test_official_spec_role_map_loads_launch_video_seed():
+    records = load_spec_role_records()
+
+    assert len(records) == 70
+    assert all(record.class_name for record in records)
+    assert all(record.source_spec_name for record in records)
+    assert all(record.display_spec_name for record in records)
+    assert all(record.primary_role in GUIDE_ROLES for record in records)
+    assert all(set(record.secondary_roles).issubset(GUIDE_ROLES) for record in records)
+    assert all(record.engine_role in {"dps", "tank", "healer_support"} for record in records)
+    assert all(record.source in {"authoritative_video", "authoritative_builder", "curated", "inferred"} for record in records)
+    assert all(record.confidence in {"high", "medium", "low"} for record in records)
+    assert all(record.evidence for record in records)
+
+
+def test_official_spec_role_map_preserves_hybrid_roles():
+    inspiration = resolve_spec_role_record("Guardian", "Inspiration")
+    farstrider = resolve_spec_role_record("Ranger", "Farstrider")
+    wind = resolve_spec_role_record("Stormbringer", "Wind")
+    accursed = resolve_spec_role_record("Bloodmage", "Accursed")
+
+    assert inspiration is not None
+    assert inspiration.primary_role == "melee_dps"
+    assert inspiration.secondary_roles == ("support",)
+    assert roles_for_filter(inspiration) == ("melee_dps", "support")
+
+    assert farstrider is not None
+    assert farstrider.primary_role == "ranged_dps"
+    assert farstrider.secondary_roles == ("support",)
+
+    assert wind is not None
+    assert wind.primary_role == "caster_dps"
+    assert wind.secondary_roles == ("support",)
+
+    assert accursed is not None
+    assert accursed.primary_role == "melee_dps"
+    assert accursed.secondary_roles == ("caster_dps",)
+
+
+def test_official_spec_role_map_uses_source_and_display_spec_names():
+    arcane = resolve_spec_role_record("Runemaster", "Arcane")
+    runic = resolve_spec_role_record("Runemaster", "Runic")
+    venom = resolve_spec_role_record("Venomancer", "Venom")
+    life = resolve_spec_role_record("Primalist", "Life")
+    primal = resolve_spec_role_record("Primalist", "Primal")
+    houndmaster = resolve_spec_role_record("Witch Hunter", "Houndmaster")
+    crusader = resolve_spec_role_record("Templar", "Crusader")
+
+    assert arcane is not None and arcane.display_spec_name == "Glyphic"
+    assert runic is not None and runic.display_spec_name == "Engravement"
+    assert venom is not None and venom.display_spec_name == "Rot"
+    assert life is not None and life.display_spec_name == "Grovekeeper"
+    assert primal is not None and primal.display_spec_name == "Wildwalker"
+    assert houndmaster is not None and houndmaster.display_spec_name == "Darkness"
+    assert crusader is not None
+    assert crusader.primary_role == "melee_dps"
+    assert crusader.confidence == "high"
