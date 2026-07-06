@@ -208,6 +208,10 @@ class GuideNode:
     asset: GuideAsset
     row: int | None = None
     col: int | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
     node_type: str = "SpendCircle"
     max_rank: int = 1
     rank: int = 0

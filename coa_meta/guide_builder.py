@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .builder_tree_layout import load_builder_tree_layouts
 from .builds import BuildConfig
 from .guide_assets import GuideAssetCatalog
 from .guide_models import (
@@ -11,7 +12,7 @@ from .guide_models import (
     GuideSite,
     GuideSpec,
 )
-from .guide_tree import build_guide_tree
+from .guide_tree import build_guide_tree, build_guide_tree_panel
 from .guide_tooltips import build_node_tooltip, load_db_tooltip_rows
 from .reporting import MetaReport, slugify_key
 from .repository import TalentRepository
@@ -36,10 +37,12 @@ def build_guide_site(
     entries_path: Path | str,
     db_tooltips_path: Path | str | None = None,
     asset_root: Path | str | None = None,
+    builder_layout_root: Path | str | None = None,
 ) -> GuideSite:
     data = report.to_dict()
     repository = TalentRepository.from_entries(entries_path)
     db_rows = load_db_tooltip_rows(db_tooltips_path)
+    builder_layouts = load_builder_tree_layouts(builder_layout_root) if builder_layout_root else None
     assets = GuideAssetCatalog(asset_root)
     tooltips = {}
     specs = []
@@ -86,6 +89,8 @@ def build_guide_site(
                 source_spec_name=str(source_spec_name),
                 max_ae=int(data.get("run_config", {}).get("max_ae") or 26),
                 max_te=int(data.get("run_config", {}).get("max_te") or 25),
+                builder_layout=builder_layouts.layout_for(class_name, str(source_spec_name)) if builder_layouts else None,
+                builder_layout_required=builder_layouts is not None,
             )
         )
         warnings = tuple(result.get("warnings", []))
@@ -133,6 +138,8 @@ def _build_cards(
     source_spec_name: str,
     max_ae: int,
     max_te: int,
+    builder_layout,
+    builder_layout_required: bool,
 ) -> list[GuideBuildCard]:
     cards = []
     guide_nodes_by_id = {node.entry_id: node for node in guide_nodes}
@@ -158,6 +165,26 @@ def _build_cards(
             spec_nodes=relevant_nodes,
             guide_nodes_by_id=guide_nodes_by_id,
         )
+        tree_panel = build_guide_tree_panel(
+            repository=repository,
+            class_name=str(result["class_name"]),
+            source_spec_name=source_spec_name,
+            display_spec_name=str(result["spec_name"]),
+            build_rank=int(build["rank"]),
+            build_label=label,
+            selected_node_ids=node_ids,
+            config=BuildConfig(
+                class_name=str(result["class_name"]),
+                level=int(result["level"]),
+                max_ae=max_ae,
+                max_te=max_te,
+            ),
+            spec_nodes=relevant_nodes,
+            guide_nodes_by_id=guide_nodes_by_id,
+            builder_layout=builder_layout,
+            layout_required=builder_layout_required,
+            combined_tree=tree,
+        )
         cards.append(
             GuideBuildCard(
                 rank=int(build["rank"]),
@@ -177,6 +204,7 @@ def _build_cards(
                 stat_priority_report=dict(build.get("stat_priority_report") or {}),
                 gear_recommendation_report=dict(build.get("gear_recommendation_report") or {}),
                 tree=tree,
+                tree_panel=tree_panel,
             )
         )
     return cards
