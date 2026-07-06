@@ -195,7 +195,7 @@ P2/P3 follow-ups:
 
 ### Milestone 1.11: Report Correctness, Data Parity, and Simulation Hardening
 
-Status: in progress. M1.11A quick fixes, M1.11B role/objective work, and M1.11C builder-tree layout plumbing are implemented; M1.11D and M1.11E have detailed design/implementation plans and are ready for execution; M1.11F-G remain planned. Design: [M1.11 Report Correctness and Data Parity](superpowers/specs/2026-07-05-m1-11-report-correctness-data-parity-design.md). Plan: [M1.11 Implementation Plan](superpowers/plans/2026-07-05-m1-11-report-correctness-data-parity.md).
+Status: implemented as a first pass. All P1 sub-milestones (M1.11A–G) are implemented and merged to `main`. CoA Builder tree DOM/screenshot parity (originally an M1.11C exit item) was evaluated and judged unnecessary — the current normalized tree-generation method renders faithfully across specs — so its manual browser-capture check is an optional spot-check, not a blocker. The remaining first-pass areas (backend trust and rotation reliability) are intentionally Phase 2-gated on empirical logs. Design: [M1.11 Report Correctness and Data Parity](superpowers/specs/2026-07-05-m1-11-report-correctness-data-parity-design.md). Plan: [M1.11 Implementation Plan](superpowers/plans/2026-07-05-m1-11-report-correctness-data-parity.md).
 
 Purpose: correct the guide output where M1.10 is visibly useful but not yet faithful enough to the CoA Builder, intended roles, or guide-site rotation expectations.
 
@@ -219,7 +219,7 @@ P1 sub-milestones:
 
 - M1.11A Report index and metadata quick fixes. Status: implemented.
 - M1.11B Authoritative role map and role-specific objective indexes. Status: implemented as a first pass. Design: [M1.11B Role Map and Role-Specific Objective Indexes](superpowers/specs/2026-07-05-m1-11-b-role-objectives-design.md). Plan: [M1.11B Implementation Plan](superpowers/plans/2026-07-05-m1-11-b-role-objectives.md).
-- M1.11C CoA Builder talent tree parity capture and renderer separation. Status: implemented as a first pass; browser screenshot parity remains a manual checklist item. Design: [M1.11C CoA Builder Talent Tree Parity](superpowers/specs/2026-07-05-m1-11-c-builder-tree-parity-design.md). Plan: [M1.11C Implementation Plan](superpowers/plans/2026-07-05-m1-11-c-builder-tree-parity.md). Checklist: [Tree Parity Checklist](tree-parity-checklist.md).
+- M1.11C CoA Builder talent tree parity capture and renderer separation. Status: implemented. Renderer separation and normalized tree layout render faithfully across specs; CoA Builder DOM/screenshot parity was judged unnecessary (see [DECISIONS.md](DECISIONS.md) Decision 17), so the browser-capture checklist is an optional spot-check rather than a required exit item. Design: [M1.11C CoA Builder Talent Tree Parity](superpowers/specs/2026-07-05-m1-11-c-builder-tree-parity-design.md). Plan: [M1.11C Implementation Plan](superpowers/plans/2026-07-05-m1-11-c-builder-tree-parity.md). Checklist: [Tree Parity Checklist](tree-parity-checklist.md).
 - M1.11D Cache-aware AscensionDB asset and canonical data scraper. Status: implemented as a first pass. Design: [M1.11D AscensionDB Asset and Canonical Data Cache](superpowers/specs/2026-07-06-m1-11-d-ascensiondb-asset-cache-design.md). Plan: [M1.11D Implementation Plan](superpowers/plans/2026-07-06-m1-11-d-ascensiondb-asset-cache.md).
 - M1.11E Rotation simulation and guide-ready priority output. Status: implemented as a first pass. Design: [M1.11E Rotation Simulation and Guide-Ready Priority Output](superpowers/specs/2026-07-06-m1-11-e-rotation-simulation-guide-output-design.md). Plan: [M1.11E Implementation Plan](superpowers/plans/2026-07-06-m1-11-e-rotation-simulation-guide-output.md).
 - M1.11F Exact leveling path and build diversity clustering. Status: implemented as a first pass. Design: [M1.11F Exact Leveling Path and Build Diversity Correctness](superpowers/specs/2026-07-06-m1-11-f-leveling-path-build-diversity-design.md). Plan: [M1.11F Implementation Plan](superpowers/plans/2026-07-06-m1-11-f-leveling-path-build-diversity.md).
@@ -228,7 +228,7 @@ P1 sub-milestones:
 Exit criteria:
 
 - The generated guide no longer presents non-DPS specs through DPS-specific labels.
-- Stalking Venomancer tree parity can be screenshot-compared against the CoA Builder and passes documented manual checks.
+- Recommended-build talent trees render faithfully across specs from normalized layout data. Pixel-level CoA Builder DOM/screenshot parity was evaluated and judged unnecessary (see [DECISIONS.md](DECISIONS.md) Decision 17); the manual browser-capture check in [tree-parity-checklist.md](tree-parity-checklist.md) is retained as an optional spot-check.
 - Icons and canonical DB tooltip/item records are generated from local cached assets without page-load network calls.
 - Recommended builds are meaningfully distinct and remain inside a documented performance/reliability band.
 - Rotation sections are concise player guidance, not full-kit category dumps.

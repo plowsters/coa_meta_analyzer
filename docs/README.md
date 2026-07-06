@@ -1,6 +1,6 @@
 # CoA Meta Analyzer Documentation
 
-This directory documents the architecture and release roadmap for the Conquest of Azeroth meta analyzer. The current repository contains the Phase 1 package, the scraper/normalization pipeline, legacy prototype scripts, implemented M1.10 guide-site work, and active M1.11 hardening plans.
+This directory documents the architecture and release roadmap for the Conquest of Azeroth meta analyzer. The current repository contains the Phase 1 package, the scraper/normalization pipeline, legacy prototype scripts, implemented M1.10 guide-site work, and an implemented first pass of the M1.11 report-correctness, data-parity, and simulation-hardening milestone (sub-milestones A–G).
 
 ## Document Map
 
@@ -60,6 +60,21 @@ python -m coa_meta meta \
 
 This writes `index.html`, `meta-report.html`, `specs/*.html`, and static assets under `reports/meta/assets/`. Spec pages include static talent trees, level snapshots, diverse recommended builds, and player-facing core rotation loops when the corresponding report fields are available.
 
+### Backend Trust Sidecar (maintainer-only)
+
+To emit an internal QA sidecar alongside the report, add `--write-backend-trust` (optionally `--backend-trust-out PATH`):
+
+```bash
+python -m coa_meta meta \
+  --entries coa_scraper/dist/coa_entries.jsonl \
+  --classes coa_scraper/dist/coa_classes.json \
+  --out reports/meta \
+  --format json \
+  --write-backend-trust
+```
+
+This writes `backend-trust-report.json` (`coa-backend-trust-v1`) with coarse per-build trust components and live-sanity watchlist matches. It is a maintainer/QA artifact only: trust scores are never rendered in the guide and must not be presented as empirical confidence until Phase 2 logs exist. See [backend-trust-schema.md](data/backend-trust-schema.md).
+
 The legacy prototype can also be run from the repository root. Prefer the scraper artifact path:
 
 ```bash
@@ -90,11 +105,11 @@ directory, use `npm --prefix coa_scraper run pipeline:m1.8`.
 
 This writes DB tooltip artifacts and an enriched entries file. AscensionDB enrichment is used for provenance and lower-level confidence; it does not replace builder legality fields.
 
-## Current Planning Focus
+## Current Status
 
-M1.11 is the active Phase 1 hardening milestone. It corrects guide output where the M1.10 static site is useful but not yet faithful enough to the CoA Builder, intended roles, source assets, or rotation expectations. See [ROADMAP.md](ROADMAP.md), [M1.11 Design](superpowers/specs/2026-07-05-m1-11-report-correctness-data-parity-design.md), and [M1.11 Implementation Plan](superpowers/plans/2026-07-05-m1-11-report-correctness-data-parity.md).
+M1.11, the Phase 1 report-correctness, data-parity, and simulation-hardening milestone, is implemented as a first pass across all sub-milestones (A–G) and merged to `main`. It corrected guide output where the M1.10 static site was useful but not yet faithful enough to the CoA Builder, intended roles, source assets, or rotation expectations. See [ROADMAP.md](ROADMAP.md), [M1.11 Design](superpowers/specs/2026-07-05-m1-11-report-correctness-data-parity-design.md), and [M1.11 Implementation Plan](superpowers/plans/2026-07-05-m1-11-report-correctness-data-parity.md).
 
-M1.11A quick fixes, M1.11B role/objective work, and M1.11C builder-tree layout plumbing are implemented in the current repo:
+M1.11A quick fixes, M1.11B role/objective work, and M1.11C builder-tree layout plumbing are implemented:
 
 - Main guide index role sections for Tank, Healer, Support, Caster DPS, Ranged DPS, and Melee DPS.
 - Multi-select role filters.
@@ -110,7 +125,7 @@ M1.11A quick fixes, M1.11B role/objective work, and M1.11C builder-tree layout p
 - Static guide rendering for separate Ability Essence, Talent Essence, and level-passive tree groups.
 - `--builder-layout-root` support for guide HTML generation.
 
-M1.11D and M1.11E are implemented in the current M1.11 worktree as first passes:
+M1.11D and M1.11E are implemented as first passes:
 
 - Cache-aware AscensionDB icon/image/item/effect scraping.
 - APL-backed rotation simulation and guide-ready priority output.
@@ -127,5 +142,7 @@ M1.10A/B, guide information architecture plus asset and tooltip integration, is 
 M1.10C/D, CoA-style static talent trees plus diverse build and core-loop selection, is also implemented. See [M1.10C/D Design](superpowers/specs/2026-07-05-m1-10-c-d-tree-diversity-design.md) and [M1.10C/D Implementation Plan](superpowers/plans/2026-07-05-m1-10-c-d-tree-diversity.md).
 
 M1.10E/F, player-facing role taxonomy plus clearer stat and gear presentation, is implemented. See [M1.10E/F Design](superpowers/specs/2026-07-05-m1-10-e-f-role-gear-stats-design.md) and [M1.10E/F Implementation Plan](superpowers/plans/2026-07-05-m1-10-e-f-role-gear-stats.md).
+
+The CoA Builder tree renderer produces faithful trees across specs; pixel-level builder DOM/screenshot parity was evaluated and judged unnecessary (see [DECISIONS.md](DECISIONS.md) Decision 17). The remaining first-pass areas — backend trust scoring (M1.11G) and rotation reliability (M1.11E) — are intentionally Phase 2-gated on empirical logs.
 
 After M1.11, the next major planning focus is Phase 2 data collection, AscensionLogs/addon calibration, and the Vercel free-tier personal upload/simulation workflow.

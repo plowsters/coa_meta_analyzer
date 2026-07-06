@@ -275,6 +275,15 @@ M1.5 implementation files:
 - `coa_meta/apl_profiles.py`
 - `coa_meta/data/apl_profiles/*.json`
 
+M1.11E guide-ready rotation files:
+
+- `coa_meta/action_catalog.py`: ability/action catalog shared by rotation generation and simulation.
+- `coa_meta/rotation_candidates.py`: bounded APL candidate generation.
+- `coa_meta/rotation_simulation.py`: bounded APL simulation used to score candidates.
+- `coa_meta/rotation_scoring.py`: role-objective scoring of simulated rotations.
+- `coa_meta/rotation_guides.py`: guide-ready priority/opener/cooldown sections (`coa-rotation-guide-v1`).
+- `coa_meta/rotation_loops.py`: compact core-loop/playstyle signatures.
+
 Responsibilities:
 
 - Generate baseline priority lists for selected builds.
@@ -397,6 +406,24 @@ Non-responsibilities:
 - Browser capture.
 - Web UI controls.
 
+## Backend Trust and QA Module
+
+Current files:
+
+- `coa_meta/backend_trust.py`
+- `coa_meta/data/live_sanity_watchlist.json`
+
+Responsibilities:
+
+- Score coarse backend-only trust components (role certainty, mechanics coverage, rotation coverage, live-sanity watchlist) for report builds (M1.11G).
+- Emit a maintainer-only `coa-backend-trust-v1` sidecar via `--write-backend-trust`, kept out of the player-facing guide.
+- Carry low-confidence, `not_user_facing` watchlist entries for known theory/live mismatch risks until Phase 2 logs exist.
+
+Non-responsibilities:
+
+- Rendering trust scores or watchlist concerns in guide HTML.
+- Claiming empirical DPS/HPS/mitigation before Phase 2 calibration.
+
 ## Simulator Module
 
 Current status:
@@ -437,7 +464,15 @@ Non-responsibilities:
 
 Current status:
 
-- Planned for M1.10 as a static GitHub Pages-friendly guide-site renderer over generated report JSON.
+- Implemented across M1.10 and M1.11 as a static GitHub Pages-friendly guide-site renderer over generated report JSON.
+
+Current files:
+
+- `coa_meta/guide_builder.py`, `coa_meta/guide_models.py`: assemble a guide-site model from `coa-meta-report-v1`.
+- `coa_meta/guide_rendering.py`, `coa_meta/guide_writer.py`: render and write the index, meta report, and per-spec HTML plus static assets.
+- `coa_meta/guide_tree.py`, `coa_meta/builder_tree_layout.py`: CoA-style talent-tree rendering and optional CoA Builder layout ingestion.
+- `coa_meta/guide_assets.py`, `coa_meta/report_assets.py`, `coa_meta/guide_tooltips.py`: icon/asset resolution and hover-tooltip payloads.
+- `coa_meta/display_names.py`: user-facing spec renames over preserved source names.
 
 Responsibilities:
 
@@ -471,8 +506,10 @@ Non-responsibilities:
 
 - `coa_meta.reporting`: expands class/spec scopes, applies eligibility rules, runs legal search, scoring, APL generation, and writes canonical report data.
 - `coa_meta.report_assets`: resolves optional local scraper assets for static HTML output.
+- `coa_meta.roles`, `coa_meta.objectives`: role resolution and role-specific objective indexes (M1.11B), backed by `coa_meta/data/spec_roles.json` and `coa_meta/data/role_overrides.json`.
+- `coa_meta.leveling_path`, `coa_meta.build_diversity`: exact level-by-level build paths and playstyle-clustered build diversity (M1.11F).
 
-M1.6 reports use `coa-meta-report-v1`. JSON is canonical; Markdown and HTML are derived views. M1.10 should extend derived views into a guide-site presentation without making HTML the source of truth.
+M1.6 reports use `coa-meta-report-v1`. JSON is canonical; Markdown and HTML are derived views. M1.10 and M1.11 extend derived views into a guide-site presentation without making HTML the source of truth.
 
 ## CLI and Packaging
 

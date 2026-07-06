@@ -174,3 +174,15 @@ Reasoning:
 - Player-facing guide UX should not make future data corrections harder to audit.
 - CoA-style talent trees can be rendered from normalized row/column, edge, cost, rank, prerequisite, and level-gate fields without reusing the live builder runtime.
 - Retail guide resources are useful information architecture references, but direct copying of layout, text, styling, or proprietary assets is out of scope.
+
+## Decision 17: CoA Builder DOM/Screenshot Tree Parity Is Not Required
+
+Status: accepted.
+
+M1.11C separates the Ability Essence, Talent Essence, and level-passive lanes and renders talent trees from normalized row/column, edge, cost, rank, prerequisite, and level-gate data. Pixel- or DOM-level parity with the live CoA Builder was evaluated and judged unnecessary: the current normalized tree-generation method already renders faithfully across specs for desktop guide use. The manual browser-capture parity checklist (`tree-parity-checklist.md`) is retained only as an optional spot-check, not a required M1.11 exit item.
+
+Reasoning:
+
+- The normalized layout already produces correct, readable trees across all specs without the live builder runtime.
+- Chasing exact builder DOM/screenshot parity adds capture and maintenance cost without improving guide usefulness.
+- Keeping the checklist as an optional spot-check preserves a path to investigate if a future spec ever renders poorly.

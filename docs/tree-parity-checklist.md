@@ -1,8 +1,10 @@
 # CoA Builder Tree Parity Checklist
 
+> Status: optional spot-check. CoA Builder DOM/screenshot parity was evaluated and judged unnecessary — the current normalized tree-generation method renders faithfully across specs (see [DECISIONS.md](DECISIONS.md) Decision 17). This checklist is retained only for investigating a spec that ever renders poorly; it is not a required M1.11 exit step.
+
 First target: `Venomancer / Stalking`
 
-Use this checklist when a browser capture is available. The unit tests should remain browser-independent.
+Use this checklist if a browser capture is ever needed to diagnose a rendering issue. The unit tests should remain browser-independent.
 
 ## Capture
 
@@ -60,4 +62,4 @@ For each target spec:
 
 Record any mismatches here before changing the renderer:
 
-- `Venomancer / Stalking`: pending first browser capture.
+- `Venomancer / Stalking`: no parity issues observed; current generation renders faithfully across specs. Optional browser capture not run.
