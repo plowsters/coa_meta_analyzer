@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from coa_meta.guide_builder import build_guide_site
+from coa_meta.guide_models import GuideBuildCard, GuideSite, GuideSpec
 from coa_meta.guide_rendering import GUIDE_CSS, GUIDE_JS, render_index_html, render_spec_html
 from coa_meta.reporting import MetaReportRunner, MetaRunConfig
 
@@ -25,6 +26,51 @@ def _site():
     return build_guide_site(report, entries_path=FIXTURES / "meta_report_fixture.jsonl")
 
 
+def _hybrid_site():
+    spec = GuideSpec(
+        slug="guardian-inspiration",
+        href="specs/guardian-inspiration.html",
+        class_name="Guardian",
+        spec_name="Inspiration",
+        role="melee_dps",
+        primary_role="melee_dps",
+        secondary_roles=("support",),
+        roles=("melee_dps", "support"),
+        confidence_label="high",
+        warning_count=0,
+        summary="Melee support hybrid.",
+        sections=("Overview", "Recommended Builds"),
+        builds=(
+            GuideBuildCard(
+                rank=1,
+                label="Hybrid Loop",
+                confidence_label="high",
+                projected_dps_index=121.0,
+                primary_index=121.0,
+                primary_index_label="Projected Damage Index",
+                objective_id="damage",
+                node_ids=tuple(),
+                warnings=tuple(),
+                playstyle_label="Hybrid Loop",
+            ),
+        ),
+        nodes=tuple(),
+        warnings=tuple(),
+        role_provenance={"source": "authoritative_video"},
+    )
+    return GuideSite(
+        schema_version="coa-guide-site-v1",
+        generated_at="2026-07-05T00:00:00+00:00",
+        index_path="index.html",
+        legacy_index_path="meta-report.html",
+        specs=(spec,),
+        metric_definitions={},
+        tooltips={},
+        assets={},
+        warnings=tuple(),
+    )
+
+
 def test_render_index_html_uses_player_facing_guide_shell():
     html = render_index_html(_site())
 
@@ -32,7 +78,33 @@ def test_render_index_html_uses_player_facing_guide_shell():
     assert "CoA Meta Guides" in html
     assert "Open guide" in html
     assert "data-role=" in html
+    assert "Theorycrafting calculations based on CoA Builder and db.ascension.gg data" in html
     assert "beam search" not in html.lower()
+
+
+def test_index_groups_specs_by_role_and_supports_multi_role_filters():
+    html = render_index_html(_site())
+
+    assert "Tank" in html
+    assert "Healer" in html
+    assert "Support" in html
+    assert "Caster DPS" in html
+    assert "Ranged DPS" in html
+    assert "Melee DPS" in html
+    assert 'aria-pressed="true"' in html
+    assert "selectedRoles" in GUIDE_JS
+    assert "data-role-section" in html
+
+
+def test_index_places_hybrid_specs_in_secondary_role_sections():
+    html = render_index_html(_hybrid_site())
+    support_section = html.split('data-role-section="support"', 1)[1].split('data-role-section="caster_dps"', 1)[0]
+    melee_section = html.split('data-role-section="melee_dps"', 1)[1]
+
+    assert "Guardian - Inspiration" in support_section
+    assert "Guardian - Inspiration" in melee_section
+    assert 'data-role-chip="melee_dps"' in html
+    assert 'data-role-chip="support"' in html
 
 
 def test_render_spec_html_includes_sections_and_omits_empty_warnings():
@@ -45,6 +117,7 @@ def test_render_spec_html_includes_sections_and_omits_empty_warnings():
     assert "Abilities and Talents" in html
     assert "Stat priorities are early theorycraft" in html
     assert 'id="warnings"' not in html
+    assert "medium confidence" not in html
 
 
 def test_render_spec_html_links_spell_and_tooltip_ids():
@@ -71,6 +144,19 @@ def test_render_spec_html_includes_static_talent_tree():
     assert "TE" in html
 
 
+def test_render_spec_html_includes_separate_tree_groups_and_passive_lane():
+    site = _site()
+    spec = next(item for item in site.specs if item.spec_name == "Damage")
+
+    html = render_spec_html(site, spec)
+
+    assert 'data-tree-kind="ability_essence"' in html
+    assert 'data-tree-kind="talent_essence"' in html
+    assert 'data-tree-kind="level_passives"' in html
+    assert 'class="passive-lane"' in html
+    assert 'data-tooltip-id="spell:2001"' in html
+
+
 def test_spec_html_renders_build_playstyle_and_core_loop():
     site = _site()
     spec = next(item for item in site.specs if item.spec_name == "Damage")
@@ -80,6 +166,16 @@ def test_spec_html_renders_build_playstyle_and_core_loop():
     assert "Recommended Builds" in html
     assert "Core Loop" in html
     assert "Early theorycraft picks" not in html
+
+
+def test_spec_html_renders_role_specific_projected_index_label():
+    site = _site()
+    spec = next(item for item in site.specs if item.spec_name == "Support")
+
+    html = render_spec_html(site, spec)
+
+    assert "Projected Healing Index" in html
+    assert 'data-tooltip-id="metric:primary_index"' in html
 
 
 def test_spec_html_renders_grouped_stats_and_best_gear_targets():
@@ -104,3 +200,18 @@ def test_static_tree_javascript_has_no_network_calls():
     assert "fetch(" not in GUIDE_JS
     assert "XMLHttpRequest" not in GUIDE_JS
     assert "getBoundingClientRect" in GUIDE_JS
+    assert 'querySelectorAll("[data-tree-kind]")' in GUIDE_JS
+
+
+def test_tree_css_keeps_desktop_geometry_and_horizontal_scroll():
+    assert ".tree-scroll { overflow-x: auto" in GUIDE_CSS
+    media_block = GUIDE_CSS.split("@media", 1)[1]
+    assert "talent-tree" not in media_block
+    assert "tree-group" not in media_block
+    assert "passive-lane" not in media_block
+
+
+def test_index_cards_do_not_surface_recommendation_confidence_badges():
+    html = render_index_html(_site())
+
+    assert "medium confidence" not in html

@@ -128,11 +128,17 @@ class GuideTree:
     edges: tuple[GuideTreeEdge, ...]
     snapshots: tuple[GuideTreeSnapshot, ...]
     warnings: tuple[str, ...]
+    tree_kind: str = "combined"
+    layout_source: str = "normalized_fallback"
+    bounds: dict[str, float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": "coa-guide-tree-v1",
             "tree_id": self.tree_id,
+            "tree_kind": self.tree_kind,
+            "layout_source": self.layout_source,
+            "bounds": dict(self.bounds or {}),
             "class_name": self.class_name,
             "spec_name": self.spec_name,
             "build_rank": self.build_rank,
@@ -146,6 +152,39 @@ class GuideTree:
             "cols": self.cols,
             "nodes": [node.to_dict() for node in self.nodes],
             "edges": [edge.to_dict() for edge in self.edges],
+            "snapshots": [snapshot.to_dict() for snapshot in self.snapshots],
+            "warnings": list(self.warnings),
+        }
+
+
+@dataclass(frozen=True)
+class GuideTreePanel:
+    tree_panel_id: str
+    class_name: str
+    source_spec_name: str
+    display_spec_name: str
+    build_rank: int
+    build_label: str
+    level: int
+    max_ae: int
+    max_te: int
+    trees: tuple[GuideTree, ...]
+    snapshots: tuple[GuideTreeSnapshot, ...]
+    warnings: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "coa-guide-tree-panel-v1",
+            "tree_panel_id": self.tree_panel_id,
+            "class_name": self.class_name,
+            "source_spec_name": self.source_spec_name,
+            "display_spec_name": self.display_spec_name,
+            "build_rank": self.build_rank,
+            "build_label": self.build_label,
+            "level": self.level,
+            "max_ae": self.max_ae,
+            "max_te": self.max_te,
+            "trees": [tree.to_dict() for tree in self.trees],
             "snapshots": [snapshot.to_dict() for snapshot in self.snapshots],
             "warnings": list(self.warnings),
         }
@@ -169,6 +208,10 @@ class GuideNode:
     asset: GuideAsset
     row: int | None = None
     col: int | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
     node_type: str = "SpendCircle"
     max_rank: int = 1
     rank: int = 0
@@ -202,6 +245,9 @@ class GuideBuildCard:
     projected_dps_index: float
     node_ids: tuple[int, ...]
     warnings: tuple[str, ...]
+    primary_index: float | None = None
+    primary_index_label: str = ""
+    objective_id: str = ""
     playstyle_label: str = ""
     selection_reason: str = ""
     performance_band: str = ""
@@ -210,6 +256,7 @@ class GuideBuildCard:
     stat_priority_report: dict[str, Any] | None = None
     gear_recommendation_report: dict[str, Any] | None = None
     tree: GuideTree | None = None
+    tree_panel: GuideTreePanel | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -217,6 +264,9 @@ class GuideBuildCard:
             "label": self.label,
             "confidence_label": self.confidence_label,
             "projected_dps_index": self.projected_dps_index,
+            "primary_index": self.primary_index if self.primary_index is not None else self.projected_dps_index,
+            "primary_index_label": self.primary_index_label or "Projected Damage Index",
+            "objective_id": self.objective_id or "damage",
             "node_ids": list(self.node_ids),
             "warnings": list(self.warnings),
             "playstyle_label": self.playstyle_label,
@@ -227,6 +277,7 @@ class GuideBuildCard:
             "stat_priority_report": dict(self.stat_priority_report or {}),
             "gear_recommendation_report": dict(self.gear_recommendation_report or {}),
             "tree": self.tree.to_dict() if self.tree else None,
+            "tree_panel": self.tree_panel.to_dict() if self.tree_panel else None,
         }
 
 
@@ -245,14 +296,23 @@ class GuideSpec:
     nodes: tuple[GuideNode, ...]
     warnings: tuple[str, ...]
     role_provenance: dict[str, Any] | None = None
+    primary_role: str = ""
+    secondary_roles: tuple[str, ...] = tuple()
+    roles: tuple[str, ...] = tuple()
 
     def to_dict(self) -> dict[str, Any]:
+        primary_role = self.primary_role or self.role
+        secondary_roles = self.secondary_roles
+        roles = self.roles or tuple(dict.fromkeys((primary_role, *secondary_roles)))
         return {
             "slug": self.slug,
             "href": self.href,
             "class_name": self.class_name,
             "spec_name": self.spec_name,
             "role": self.role,
+            "primary_role": primary_role,
+            "secondary_roles": list(secondary_roles),
+            "roles": list(roles),
             "confidence_label": self.confidence_label,
             "warning_count": self.warning_count,
             "summary": self.summary,

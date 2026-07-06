@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coa_meta.reporting import MetaReportRunner, MetaRunConfig
+from coa_meta.reporting import SpecResult, MetaReportRunner, MetaRunConfig
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -78,12 +78,48 @@ def test_meta_report_exposes_guide_role_engine_role_and_provenance():
     assert by_spec["Support"]["engine_role"] == "healer_support"
     assert by_spec["Support"]["role_provenance"]["source"] == "curated"
     build = by_spec["Support"]["top_builds"][0]
+    assert build["projected_dps_index"] > 0
+    assert build["primary_index"] == build["projected_dps_index"]
+    assert build["primary_index_label"] == "Projected Healing Index"
+    assert build["objective_id"] == "healing"
+    assert build["objective_breakdown"]
+    assert build["alternate_objective_scores"] == {}
     assert build["provenance"]["engine_role"] == "healer_support"
     assert build["stat_priority_report"]["schema_version"] == "coa-stat-priority-v2"
     assert build["stat_priority_report"]["role"] == "healer"
     assert build["gear_recommendation_report"]["schema_version"] == "coa-gear-recommendation-v2"
     assert build["gear_recommendation_report"]["role"] == "healer"
     assert "best_weapon_types" in build["gear_recommendation_report"]
+
+
+def test_spec_result_serializes_primary_and_secondary_roles():
+    result = SpecResult(
+        class_name="Guardian",
+        spec_id=18,
+        spec_name="Inspiration",
+        role="melee_dps",
+        primary_role="melee_dps",
+        secondary_roles=("support",),
+        roles=("melee_dps", "support"),
+        engine_role="dps",
+        role_provenance={"source": "authoritative_video", "secondary_roles": ["support"]},
+        level=60,
+        encounter_profile_id="baseline_single_target",
+        search_profile_id="default",
+        scoring_profile_id="auto",
+        apl_profile_id="auto",
+        summary={},
+        top_builds=tuple(),
+        warnings=tuple(),
+    )
+
+    payload = result.to_dict()
+
+    assert payload["role"] == "melee_dps"
+    assert payload["primary_role"] == "melee_dps"
+    assert payload["secondary_roles"] == ["support"]
+    assert payload["roles"] == ["melee_dps", "support"]
+    assert payload["role_provenance"]["source"] == "authoritative_video"
 
 
 def test_meta_report_runner_allows_explicit_role_override():

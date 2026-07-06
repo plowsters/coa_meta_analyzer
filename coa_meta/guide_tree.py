@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Mapping
 
+from .builder_tree_layout import BuilderLayoutTree, BuilderTreeLayout
 from .builds import BuildConfig, BuildRules
 from .domain import SelectedRank, TalentNode, ValidationIssue
-from .guide_models import GuideAsset, GuideNode, GuideNodeGate, GuideTree, GuideTreeEdge, GuideTreeSnapshot
+from .guide_models import GuideAsset, GuideNode, GuideNodeGate, GuideTree, GuideTreeEdge, GuideTreePanel, GuideTreeSnapshot
 from .guide_tooltips import ascension_spell_url
 from .repository import TalentRepository
 
@@ -106,6 +107,169 @@ def build_guide_tree(
         snapshots=snapshots,
         warnings=tuple(dict.fromkeys(warnings)),
     )
+
+
+def build_guide_tree_panel(
+    *,
+    repository: TalentRepository,
+    class_name: str,
+    source_spec_name: str,
+    display_spec_name: str,
+    build_rank: int,
+    build_label: str,
+    selected_node_ids: tuple[int, ...],
+    config: BuildConfig,
+    spec_nodes: tuple[TalentNode, ...],
+    levels: tuple[int, ...] | None = None,
+    guide_nodes_by_id: Mapping[int, GuideNode] | None = None,
+    builder_layout: BuilderTreeLayout | None = None,
+    layout_required: bool = False,
+    combined_tree: GuideTree | None = None,
+) -> GuideTreePanel:
+    combined = combined_tree or build_guide_tree(
+        repository=repository,
+        class_name=class_name,
+        spec_name=source_spec_name,
+        build_rank=build_rank,
+        build_label=build_label,
+        selected_node_ids=selected_node_ids,
+        config=config,
+        spec_nodes=spec_nodes,
+        levels=levels,
+        guide_nodes_by_id=guide_nodes_by_id,
+    )
+    warnings = list(combined.warnings)
+    if layout_required and builder_layout is None:
+        warnings.append("builder_layout_missing")
+    trees = tuple(
+        _split_tree_group(
+            combined,
+            tree_kind,
+            layout_tree=builder_layout.tree_by_kind(tree_kind) if builder_layout else None,
+            warnings=warnings,
+        )
+        for tree_kind in _TREE_GROUP_ORDER
+    )
+    return GuideTreePanel(
+        tree_panel_id=combined.tree_id,
+        class_name=class_name,
+        source_spec_name=source_spec_name,
+        display_spec_name=display_spec_name,
+        build_rank=build_rank,
+        build_label=build_label,
+        level=config.level,
+        max_ae=config.max_ae,
+        max_te=config.max_te,
+        trees=trees,
+        snapshots=combined.snapshots,
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
+
+
+_TREE_GROUP_ORDER = ("ability_essence", "talent_essence", "level_passives")
+
+
+def _split_tree_group(
+    tree: GuideTree,
+    tree_kind: str,
+    *,
+    layout_tree: BuilderLayoutTree | None = None,
+    warnings: list[str],
+) -> GuideTree:
+    fallback_nodes = tuple(node for node in tree.nodes if _tree_kind_for_node(node) == tree_kind)
+    nodes = _apply_layout_nodes(fallback_nodes, tree_kind=tree_kind, layout_tree=layout_tree, warnings=warnings)
+    node_ids = {node.entry_id for node in nodes}
+    edges = _apply_layout_edges(tree, node_ids=node_ids, layout_tree=layout_tree)
+    rows = max((node.row or 0 for node in nodes), default=0) + 1
+    cols = max((node.col or 0 for node in nodes), default=0) + 1
+    layout_source = layout_tree.layout_source if layout_tree else "normalized_fallback"
+    bounds = layout_tree.bounds.to_dict() if layout_tree else None
+    return replace(
+        tree,
+        tree_id=f"{tree.tree_id}-{tree_kind}",
+        tree_kind=tree_kind,
+        layout_source=layout_source,
+        bounds=bounds,
+        rows=rows,
+        cols=cols,
+        nodes=nodes,
+        edges=edges,
+    )
+
+
+def _apply_layout_nodes(
+    fallback_nodes: tuple[GuideNode, ...],
+    *,
+    tree_kind: str,
+    layout_tree: BuilderLayoutTree | None,
+    warnings: list[str],
+) -> tuple[GuideNode, ...]:
+    if layout_tree is None:
+        return fallback_nodes
+    fallback_by_id = {node.entry_id: node for node in fallback_nodes}
+    seen: set[int] = set()
+    ordered: list[GuideNode] = []
+    for layout_node in layout_tree.nodes:
+        base = fallback_by_id.get(layout_node.entry_id)
+        if base is None:
+            continue
+        expected_kind = _tree_kind_for_node(base)
+        if expected_kind != tree_kind:
+            warnings.append(f"layout_tree_kind_conflict:{base.entry_id}:{expected_kind}:{tree_kind}")
+        ordered.append(
+            replace(
+                base,
+                x=layout_node.x,
+                y=layout_node.y,
+                width=layout_node.width,
+                height=layout_node.height,
+            )
+        )
+        seen.add(layout_node.entry_id)
+    for node in fallback_nodes:
+        if node.entry_id in seen:
+            continue
+        warnings.append(f"layout_node_missing:{node.entry_id}")
+        ordered.append(node)
+    return tuple(ordered)
+
+
+def _apply_layout_edges(
+    tree: GuideTree,
+    *,
+    node_ids: set[int],
+    layout_tree: BuilderLayoutTree | None,
+) -> tuple[GuideTreeEdge, ...]:
+    if layout_tree is None:
+        return tuple(edge for edge in tree.edges if edge.source_id in node_ids and edge.target_id in node_ids)
+    fallback_edges = {
+        (edge.source_id, edge.target_id, edge.kind): edge
+        for edge in tree.edges
+    }
+    edges: list[GuideTreeEdge] = []
+    for layout_edge in layout_tree.edges:
+        if layout_edge.source_entry_id not in node_ids or layout_edge.target_entry_id not in node_ids:
+            continue
+        fallback = fallback_edges.get((layout_edge.source_entry_id, layout_edge.target_entry_id, layout_edge.kind))
+        edges.append(
+            GuideTreeEdge(
+                source_id=layout_edge.source_entry_id,
+                target_id=layout_edge.target_entry_id,
+                kind=layout_edge.kind,
+                state=fallback.state if fallback else "inactive",
+            )
+        )
+    return tuple(edges)
+
+
+def _tree_kind_for_node(node: GuideNode) -> str:
+    if node.ae_cost == 0 and node.te_cost == 0:
+        return "level_passives"
+    if node.essence_kind == "ability" or node.ae_cost > 0:
+        return "ability_essence"
+    if node.essence_kind == "talent" or node.te_cost > 0:
+        return "talent_essence"
+    return "level_passives"
 
 
 def classify_node_state(

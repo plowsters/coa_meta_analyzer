@@ -6,6 +6,12 @@ from typing import Any
 
 from .guide_models import GuideSite, GuideSpec
 
+ROLE_DISPLAY_ORDER = ("tank", "healer", "support", "caster_dps", "ranged_dps", "melee_dps")
+FRONT_PAGE_DISCLAIMER = (
+    "Theorycrafting calculations based on CoA Builder and db.ascension.gg data. "
+    "AscensionLogs compatibility will be added for more accurate tuning if CoA remains available."
+)
+
 GUIDE_CSS = """
 :root {
   --bg: #09050f;
@@ -23,6 +29,15 @@ body { margin: 0; font-family: Inter, system-ui, sans-serif; background: radial-
 a { color: var(--fel); }
 .site-shell { max-width: 1280px; margin: 0 auto; padding: 28px; }
 .hero { padding: 28px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(101,240,107,.12), rgba(143,92,255,.13)); border-radius: 10px; box-shadow: 0 0 32px rgba(101,240,107,.08); }
+.front-disclaimer { margin-top: 16px; border: 1px solid rgba(245,197,66,.55); color: #ffe8a3; border-radius: 8px; padding: 12px 14px; background: rgba(245,197,66,.08); }
+.role-filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.role-filter { appearance: none; border: 1px solid rgba(143,92,255,.45); border-radius: 999px; background: rgba(28,16,44,.9); color: var(--text); padding: 8px 13px; font: inherit; cursor: pointer; box-shadow: inset 0 0 12px rgba(143,92,255,.1); }
+.role-filter:hover { border-color: var(--fel); box-shadow: 0 0 16px rgba(101,240,107,.18), inset 0 0 12px rgba(143,92,255,.1); }
+.role-filter.is-active, .role-filter[aria-pressed="true"] { border-color: var(--fel); color: #061109; background: linear-gradient(135deg, var(--fel), #b6ff5f); box-shadow: 0 0 18px rgba(101,240,107,.28); }
+.role-section { margin-top: 26px; }
+.role-section[hidden] { display: none; }
+.role-section-title { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--text); text-shadow: 0 0 14px rgba(143,92,255,.42); }
+.empty-role { color: var(--muted); margin: 0; }
 .guide-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 22px; }
 .guide-card, .panel { border: 1px solid var(--border); background: rgba(19,11,30,.92); border-radius: 8px; padding: 18px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .85rem; }
@@ -36,13 +51,22 @@ a { color: var(--fel); }
 .tree-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
 .tree-toolbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; }
 .tree-scroll { overflow-x: auto; padding-bottom: 8px; }
+.tree-build-panel[hidden] { display: none; }
+.tree-groups { display: grid; gap: 18px; min-width: max-content; }
+.tree-group, .passive-lane { min-width: max-content; }
+.tree-group h3, .passive-lane h3 { margin: 0 0 8px; color: var(--fel); }
 .talent-tree { position: relative; display: grid; grid-template-columns: repeat(var(--tree-cols), 72px); grid-template-rows: repeat(var(--tree-rows), 72px); gap: 22px; min-width: max-content; padding: 18px; border: 1px solid rgba(143,92,255,.28); border-radius: 8px; background: radial-gradient(circle at center, rgba(143,92,255,.10), rgba(9,5,15,.45)); }
+.talent-tree.is-captured-layout { display: block; min-width: var(--tree-width); height: var(--tree-height); }
 .talent-tree[hidden] { display: none; }
+.passive-lane .talent-tree { display: flex; gap: 24px; align-items: center; min-height: 112px; }
+.passive-lane .talent-tree.is-captured-layout { display: block; }
 .tree-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .tree-links line { stroke: rgba(143,92,255,.45); stroke-width: 3; filter: drop-shadow(0 0 5px rgba(143,92,255,.35)); }
 .tree-links line.is-selected { stroke: var(--fel); filter: drop-shadow(0 0 7px rgba(101,240,107,.55)); }
 .tree-links line.is-available { stroke: var(--void); }
 .tree-node { position: relative; z-index: 1; width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid rgba(143,92,255,.5); border-radius: 50%; color: var(--text); background: rgba(19,11,30,.94); box-shadow: inset 0 0 16px rgba(143,92,255,.16); cursor: help; }
+.is-captured-layout .tree-node { position: absolute; }
+.passive-lane .tree-node { border-radius: 12px; }
 .tree-node.shape-square { border-radius: 12px; }
 .tree-node.shape-hex { clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
 .tree-node.is-selected { border-color: var(--fel); box-shadow: 0 0 18px rgba(101,240,107,.42), inset 0 0 18px rgba(101,240,107,.16); }
@@ -54,6 +78,8 @@ a { color: var(--fel); }
 .leveling-path { margin-top: 14px; display: grid; gap: 8px; }
 .leveling-path li { margin-bottom: 4px; color: var(--muted); }
 .tooltip { position: fixed; z-index: 20; max-width: 360px; padding: 12px; border: 1px solid var(--void); border-radius: 8px; background: #09050f; box-shadow: 0 0 28px rgba(143,92,255,.25); }
+.tooltip table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.tooltip th, .tooltip td { border: 1px solid rgba(143,92,255,.3); padding: 4px 6px; text-align: left; vertical-align: top; }
 @media (max-width: 720px) { .site-shell { padding: 16px; } .hero { padding: 20px; } }
 """
 
@@ -88,9 +114,34 @@ GUIDE_JS = """
   document.addEventListener("click", event => {
     const filter = event.target.closest("[data-role-filter]");
     if (!filter) return;
-    const role = filter.getAttribute("data-role-filter");
+    const buttons = Array.from(document.querySelectorAll("[data-role-filter]"));
+    const roleButtons = buttons.filter(button => button.getAttribute("data-role-filter") !== "all");
+    const selectedRoles = new Set(roleButtons.filter(button => button.getAttribute("aria-pressed") === "true").map(button => button.getAttribute("data-role-filter")));
+    if (filter.getAttribute("data-role-filter") === "all") {
+      selectedRoles.clear();
+      roleButtons.forEach(button => selectedRoles.add(button.getAttribute("data-role-filter")));
+    } else {
+      const role = filter.getAttribute("data-role-filter");
+      if (selectedRoles.has(role)) selectedRoles.delete(role);
+      else selectedRoles.add(role);
+    }
+    roleButtons.forEach(button => {
+      const active = selectedRoles.has(button.getAttribute("data-role-filter"));
+      button.setAttribute("aria-pressed", String(active));
+      button.classList.toggle("is-active", active);
+    });
+    const allSelected = roleButtons.every(button => selectedRoles.has(button.getAttribute("data-role-filter")));
+    const allButton = buttons.find(button => button.getAttribute("data-role-filter") === "all");
+    if (allButton) {
+      allButton.setAttribute("aria-pressed", String(allSelected));
+      allButton.classList.toggle("is-active", allSelected);
+    }
     document.querySelectorAll("[data-role]").forEach(card => {
-      card.hidden = role !== "all" && card.getAttribute("data-role") !== role;
+      const roles = (card.getAttribute("data-role") || "").split(/\\s+/).filter(Boolean);
+      card.hidden = !roles.some(role => selectedRoles.has(role));
+    });
+    document.querySelectorAll("[data-role-section]").forEach(section => {
+      section.hidden = !selectedRoles.has(section.getAttribute("data-role-section"));
     });
   });
   function parseJson(value, fallback) {
@@ -127,11 +178,12 @@ GUIDE_JS = """
     const svg = tree.querySelector(".tree-links");
     if (!svg) return;
     const edges = parseJson(svg.getAttribute("data-tree-edges"), []);
-    const treeRect = tree.getBoundingClientRect();
+    const canvas = svg.closest(".talent-tree") || tree;
+    const treeRect = canvas.getBoundingClientRect();
     svg.innerHTML = "";
     edges.forEach(edge => {
-      const source = tree.querySelector(`[data-tree-node-id="${edge.source_id}"]`);
-      const target = tree.querySelector(`[data-tree-node-id="${edge.target_id}"]`);
+      const source = canvas.querySelector(`[data-tree-node-id="${edge.source_id}"]`);
+      const target = canvas.querySelector(`[data-tree-node-id="${edge.target_id}"]`);
       if (!source || !target) return;
       const a = source.getBoundingClientRect();
       const b = target.getBoundingClientRect();
@@ -148,42 +200,49 @@ GUIDE_JS = """
     document.querySelectorAll("[data-guide-tree-panel]").forEach(panel => {
       const buildSelector = panel.querySelector("[data-tree-build-selector]");
       const levelSelector = panel.querySelector("[data-tree-level-selector]");
-      function currentTree() {
-        const id = buildSelector ? buildSelector.value : panel.querySelector(".talent-tree")?.getAttribute("data-tree-id");
-        return panel.querySelector(`.talent-tree[data-tree-id="${id}"]`) || panel.querySelector(".talent-tree");
+      function currentBuildPanel() {
+        const id = buildSelector ? buildSelector.value : panel.querySelector("[data-tree-build-panel]")?.getAttribute("data-tree-build-panel");
+        return panel.querySelector(`[data-tree-build-panel="${id}"]`) || panel.querySelector("[data-tree-build-panel]");
       }
       function refresh() {
-        panel.querySelectorAll(".talent-tree").forEach(tree => { tree.hidden = tree !== currentTree(); });
-        const tree = currentTree();
-        if (!tree) return;
-        applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+        const activePanel = currentBuildPanel();
+        panel.querySelectorAll("[data-tree-build-panel]").forEach(buildPanel => { buildPanel.hidden = buildPanel !== activePanel; });
+        if (!activePanel) return;
+        activePanel.querySelectorAll("[data-tree-kind]").forEach(tree => {
+          applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+        });
       }
       if (buildSelector) buildSelector.addEventListener("change", refresh);
       if (levelSelector) levelSelector.addEventListener("change", refresh);
       refresh();
     });
   }
-  window.addEventListener("resize", () => document.querySelectorAll(".talent-tree").forEach(drawTreeLinks));
+  window.addEventListener("resize", () => document.querySelectorAll("[data-tree-kind]").forEach(drawTreeLinks));
   document.addEventListener("DOMContentLoaded", initTrees);
 })();
 """
 
 
 def render_index_html(site: GuideSite) -> str:
-    roles = sorted({spec.role for spec in site.specs})
-    filters = '<button data-role-filter="all">All</button>' + "".join(
-        f'<button data-role-filter="{_e(role)}">{_e(_label(role))}</button>' for role in roles
+    roles = _ordered_roles(site)
+    filters = '<div class="role-filter-bar" aria-label="Filter guides by role">'
+    filters += '<button class="role-filter is-active" data-role-filter="all" aria-pressed="true">All Roles</button>'
+    filters += "".join(
+        f'<button class="role-filter is-active" data-role-filter="{_e(role)}" aria-pressed="true">{_e(_label(role))}</button>'
+        for role in roles
     )
-    cards = "".join(_render_spec_card(spec) for spec in site.specs)
+    filters += "</div>"
+    role_sections = "".join(_render_role_section(role, [spec for spec in site.specs if role in _spec_roles(spec)]) for role in roles)
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         "<title>CoA Meta Guides</title><link rel=\"stylesheet\" href=\"assets/guide.css\">"
         "</head><body><main class=\"site-shell\">"
         "<section class=\"hero\"><h1>CoA Meta Guides</h1>"
-        "<p>Player-facing theorycraft guides generated from normalized Conquest of Azeroth builder data.</p></section>"
+        "<p>Player-facing class and specialization guides for Conquest of Azeroth.</p>"
+        f'<p class="front-disclaimer">{_e(FRONT_PAGE_DISCLAIMER)}</p></section>'
         f"<section class=\"panel\"><h2>Find Your Guide</h2>{filters}</section>"
-        f"<section class=\"guide-grid\">{cards}</section>"
+        f"{role_sections}"
         f"{_tooltip_script(site)}<script src=\"assets/guide.js\"></script>"
         "</main></body></html>"
     )
@@ -204,8 +263,7 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
         "<link rel=\"stylesheet\" href=\"../assets/guide.css\"></head><body><main class=\"site-shell\">"
         f'<p><a href="../index.html">Back to guides</a></p><section class="hero" id="overview">'
         f"<h1>{_e(spec.class_name)} - {_e(spec.spec_name)}</h1><p>{_e(spec.summary)}</p>"
-        f'<span class="chip" data-tooltip-id="role:{_e(spec.slug)}">{_e(_label(spec.role))}</span> '
-        f'<span class="chip">{_e(spec.confidence_label)} confidence</span></section>'
+        f'{_role_chips(spec, tooltip_id=f"role:{spec.slug}")}</section>'
         f'<nav class="guide-nav">{nav}</nav>'
         f'<section class="panel" id="recommended-builds"><h2>Recommended Builds</h2>{builds}</section>'
         f"{_render_talent_tree_section(spec)}"
@@ -221,27 +279,67 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
 
 def _render_spec_card(spec: GuideSpec) -> str:
     warning = '<span class="chip warning">Warnings</span>' if spec.warning_count else ""
+    role_values = " ".join(_spec_roles(spec))
     return (
-        f'<article class="guide-card" data-role="{_e(spec.role)}">'
+        f'<article class="guide-card" data-role="{_e(role_values)}">'
         f"<h2>{_e(spec.class_name)} - {_e(spec.spec_name)}</h2>"
-        f"<p>{_e(spec.summary)}</p><p><span class=\"chip\">{_e(_label(spec.role))}</span> "
-        f"<span class=\"chip\">{_e(spec.confidence_label)} confidence</span> {warning}</p>"
+        f"<p>{_e(spec.summary)}</p><p>{_role_chips(spec)} {warning}</p>"
         f'<p><a href="{_e(spec.href)}">Open guide</a></p></article>'
     )
 
 
+def _render_role_section(role: str, specs: list[GuideSpec]) -> str:
+    if specs:
+        cards = "".join(_render_spec_card(spec) for spec in sorted(specs, key=lambda item: (item.class_name, item.spec_name)))
+        body = f'<div class="guide-grid">{cards}</div>'
+    else:
+        body = f'<p class="empty-role">No {_e(_label(role))} guides are available in the current report.</p>'
+    return (
+        f'<section class="role-section" data-role-section="{_e(role)}">'
+        f'<h2 class="role-section-title">{_e(_label(role))}</h2>{body}</section>'
+    )
+
+
+def _ordered_roles(site: GuideSite) -> tuple[str, ...]:
+    site_roles = {role for spec in site.specs for role in _spec_roles(spec)}
+    extras = sorted(role for role in site_roles if role not in ROLE_DISPLAY_ORDER)
+    return ROLE_DISPLAY_ORDER + tuple(extras)
+
+
 def _render_build(build: Any) -> str:
     warning = '<span class="chip warning">Warnings</span>' if build.warnings else ""
+    primary_index = build.primary_index if build.primary_index is not None else build.projected_dps_index
+    primary_index_label = build.primary_index_label or "Projected Damage Index"
     return (
         '<article class="guide-card">'
         f"<h3>{_e(build.playstyle_label or build.label)}</h3>"
         f"<p>{_e(build.selection_reason or 'Strong current theorycraft result for this spec.')}</p>"
         f"<p><span class=\"chip\">{_e(build.reliability_label or build.confidence_label)} reliability</span> "
         f"<span class=\"chip\">{_e(build.performance_band or 'top theorycraft band')}</span> "
-        f"<span class=\"chip\" data-tooltip-id=\"metric:projected_dps_index\">Projected Index {build.projected_dps_index:.1f}</span> {warning}</p>"
+        f"<span class=\"chip\" data-tooltip-id=\"metric:primary_index\">{_e(primary_index_label)} {primary_index:.1f}</span> {warning}</p>"
         '<p><a href="#talents">View tree</a></p>'
         "</article>"
     )
+
+
+def _spec_roles(spec: GuideSpec) -> tuple[str, ...]:
+    primary_role = spec.primary_role or spec.role
+    roles = spec.roles or tuple(dict.fromkeys((primary_role, *spec.secondary_roles)))
+    if roles:
+        return tuple(dict.fromkeys(str(role) for role in roles if role))
+    return (spec.role,)
+
+
+def _role_chips(spec: GuideSpec, *, tooltip_id: str = "") -> str:
+    primary_role = spec.primary_role or spec.role
+    chips: list[str] = []
+    tooltip = f' data-tooltip-id="{_e(tooltip_id)}"' if tooltip_id else ""
+    chips.append(f'<span class="chip" data-role-chip="{_e(primary_role)}"{tooltip}>{_e(_label(primary_role))}</span>')
+    for role in spec.secondary_roles:
+        if role == primary_role:
+            continue
+        chips.append(f'<span class="chip" data-role-chip="{_e(role)}">Secondary: {_e(_label(role))}</span>')
+    return " ".join(chips)
 
 
 def _render_rotation_section(spec: GuideSpec) -> str:
@@ -328,26 +426,32 @@ def _render_loop_list(title: str, items: Any) -> str:
 
 
 def _render_talent_tree_section(spec: GuideSpec) -> str:
-    tree_builds = [build for build in spec.builds if build.tree]
+    tree_builds = [build for build in spec.builds if build.tree_panel or build.tree]
     if not tree_builds:
         return '<section class="panel" id="talents"><h2>Talents</h2><p>No talent tree data is available for this build.</p></section>'
-    first_tree = tree_builds[0].tree
+    first_panel = tree_builds[0].tree_panel
+    first_tree = _first_panel_tree(first_panel) if first_panel else tree_builds[0].tree
     assert first_tree is not None
     build_options = "".join(
-        f'<option value="{_e(build.tree.tree_id if build.tree else "")}">{_e(build.label)}</option>'
+        f'<option value="{_e(_build_tree_panel_id(build))}">{_e(build.label)}</option>'
         for build in tree_builds
     )
-    levels = sorted({snapshot.level for build in tree_builds if build.tree for snapshot in build.tree.snapshots})
+    levels = sorted(
+        {
+            snapshot.level
+            for build in tree_builds
+            for snapshot in _build_tree_snapshots(build)
+        }
+    )
     level_options = "".join(
         f'<option value="{level}"{" selected" if level == first_tree.level else ""}>Level {level}</option>'
         for level in levels
     )
-    trees = "".join(
-        _render_tree(build.tree, hidden=index > 0)
+    panels = "".join(
+        _render_build_tree_panel(build, hidden=index > 0)
         for index, build in enumerate(tree_builds)
-        if build.tree
     )
-    leveling_path = _render_leveling_path(first_tree)
+    leveling_path = _render_leveling_path(first_panel or first_tree)
     return (
         '<section class="panel" id="talents" data-guide-tree-panel>'
         "<h2>Talents</h2>"
@@ -356,20 +460,87 @@ def _render_talent_tree_section(spec: GuideSpec) -> str:
         f'<label>Level <select data-tree-level-selector>{level_options}</select></label>'
         f'<span class="chip" data-tree-budget-summary>AE {first_tree.ae_spent}/{first_tree.max_ae} - TE {first_tree.te_spent}/{first_tree.max_te}</span>'
         "</div>"
-        f'<div class="tree-scroll">{trees}</div>'
+        f'<div class="tree-scroll">{panels}</div>'
         f"{leveling_path}"
         "</section>"
     )
 
 
-def _render_tree(tree: Any, *, hidden: bool) -> str:
-    edges = _json_attr([edge.to_dict() for edge in tree.edges])
-    snapshots = _json_attr([snapshot.to_dict() for snapshot in tree.snapshots])
-    nodes = "".join(_render_tree_node(node) for node in tree.nodes)
+def _build_tree_panel_id(build: Any) -> str:
+    if build.tree_panel:
+        return build.tree_panel.tree_panel_id
+    if build.tree:
+        return build.tree.tree_id
+    return ""
+
+
+def _build_tree_snapshots(build: Any) -> tuple[Any, ...]:
+    if build.tree_panel:
+        return tuple(build.tree_panel.snapshots)
+    if build.tree:
+        return tuple(build.tree.snapshots)
+    return tuple()
+
+
+def _first_panel_tree(panel: Any) -> Any:
+    for tree in panel.trees:
+        if tree.nodes:
+            return tree
+    return panel.trees[0] if panel.trees else None
+
+
+def _render_build_tree_panel(build: Any, *, hidden: bool) -> str:
+    if build.tree_panel:
+        groups = "".join(_render_tree_group(tree) for tree in build.tree_panel.trees)
+        warnings = "".join(f"<li>{_e(warning)}</li>" for warning in build.tree_panel.warnings)
+        warning_html = f'<div class="section-note"><ul>{warnings}</ul></div>' if warnings else ""
+        return (
+            f'<div class="tree-build-panel" data-tree-build-panel="{_e(build.tree_panel.tree_panel_id)}"'
+            f'{" hidden" if hidden else ""}>'
+            f'<div class="tree-groups">{groups}</div>{warning_html}</div>'
+        )
+    if build.tree:
+        return (
+            f'<div class="tree-build-panel" data-tree-build-panel="{_e(build.tree.tree_id)}"'
+            f'{" hidden" if hidden else ""}>'
+            f'{_render_tree(build.tree, hidden=False)}</div>'
+        )
+    return ""
+
+
+def _render_tree_group(tree: Any) -> str:
+    group_class = "passive-lane" if tree.tree_kind == "level_passives" else "tree-group"
     return (
-        f'<div class="talent-tree" data-tree-id="{_e(tree.tree_id)}" data-tree-level="{tree.level}" '
-        f'data-tree-snapshots="{snapshots}" style="--tree-cols: {tree.cols}; --tree-rows: {tree.rows}"'
-        f'{" hidden" if hidden else ""}>'
+        f'<div class="{group_class}" data-tree-kind="{_e(tree.tree_kind)}" data-tree-id="{_e(tree.tree_id)}" '
+        f'data-tree-level="{tree.level}" data-tree-snapshots="{_json_attr([snapshot.to_dict() for snapshot in tree.snapshots])}">'
+        f'<h3>{_e(_tree_group_label(tree.tree_kind))}</h3>'
+        f'{_render_tree_canvas(tree)}</div>'
+    )
+
+
+def _render_tree(tree: Any, *, hidden: bool) -> str:
+    group = (
+        f'<div class="tree-group" data-tree-kind="{_e(tree.tree_kind)}" data-tree-id="{_e(tree.tree_id)}" '
+        f'data-tree-level="{tree.level}" data-tree-snapshots="{_json_attr([snapshot.to_dict() for snapshot in tree.snapshots])}">'
+        f'{_render_tree_canvas(tree)}</div>'
+    )
+    return f'<div class="legacy-tree-wrapper"{" hidden" if hidden else ""}>{group}</div>'
+
+
+def _render_tree_canvas(tree: Any) -> str:
+    edges = _json_attr([edge.to_dict() for edge in tree.edges])
+    nodes = "".join(_render_tree_node(node) for node in tree.nodes)
+    captured = bool(tree.bounds)
+    if captured:
+        width = int(float(tree.bounds.get("width", 0) or max((node.x or 0) + (node.width or 64) for node in tree.nodes)))
+        height = int(float(tree.bounds.get("height", 0) or max((node.y or 0) + (node.height or 64) for node in tree.nodes)))
+        style = f"--tree-width: {width}px; --tree-height: {height}px"
+        css_class = "talent-tree is-captured-layout"
+    else:
+        style = f"--tree-cols: {tree.cols}; --tree-rows: {tree.rows}"
+        css_class = "talent-tree"
+    return (
+        f'<div class="{css_class}" style="{style}">'
         f'<svg class="tree-links" data-tree-edges="{edges}" aria-hidden="true"></svg>'
         f"{nodes}</div>"
     )
@@ -380,19 +551,42 @@ def _render_tree_node(node: Any) -> str:
     state_class = _tree_state_class(node.tree_state)
     label = node.name[:2].upper()
     rank = f"{node.rank}/{node.max_rank}" if node.max_rank > 1 else str(node.rank or 1)
+    style = _tree_node_style(node)
     return (
         f'<button class="tree-node {shape} {state_class}" data-tree-node-id="{node.entry_id}" '
         f'data-tooltip-id="{_e(node.tooltip_id)}" data-state="{_e(node.tree_state)}" '
         f'data-rank="{node.rank}" data-max-rank="{node.max_rank}" '
-        f'style="grid-column: {node.col + 1 if node.col is not None else 1}; grid-row: {node.row + 1 if node.row is not None else 1}" '
+        f'style="{style}" '
         f'aria-label="{_e(node.name)}">'
         f'<span>{_e(label)}</span><span class="tree-rank">{_e(rank)}</span></button>'
     )
 
 
-def _render_leveling_path(tree: Any) -> str:
+def _tree_node_style(node: Any) -> str:
+    if node.x is not None and node.y is not None:
+        width = node.width if node.width is not None else 64
+        height = node.height if node.height is not None else 64
+        return f"left: {node.x}px; top: {node.y}px; width: {width}px; height: {height}px"
+    return f"grid-column: {node.col + 1 if node.col is not None else 1}; grid-row: {node.row + 1 if node.row is not None else 1}"
+
+
+def _tree_group_label(tree_kind: str) -> str:
+    labels = {
+        "ability_essence": "Ability Essence",
+        "talent_essence": "Talent Essence",
+        "level_passives": "Level Passives",
+        "combined": "Talent Tree",
+    }
+    return labels.get(tree_kind, tree_kind.replace("_", " ").title())
+
+
+def _render_leveling_path(tree_or_panel: Any) -> str:
+    if hasattr(tree_or_panel, "trees"):
+        candidate_nodes = [node for tree in tree_or_panel.trees for node in tree.nodes]
+    else:
+        candidate_nodes = list(tree_or_panel.nodes)
     selected = sorted(
-        (node for node in tree.nodes if node.selected or node.free),
+        (node for node in candidate_nodes if node.selected or node.free),
         key=lambda item: (item.required_level, item.row or 0, item.col or 0, item.name),
     )
     if not selected:
@@ -436,6 +630,14 @@ def _tooltip_script(site: GuideSite) -> str:
         "html": "<strong>Projected DPS Index</strong><div>A relative theorycraft score, not observed DPS.</div>",
         "text": "A relative theorycraft score, not observed DPS.",
     }
+    payload["metric:primary_index"] = {
+        "html": (
+            "<strong>Role-Specific Projected Index</strong>"
+            "<div>A relative theorycraft score labeled for this spec's primary role. "
+            "It is not observed logs or simulated output.</div>"
+        ),
+        "text": "A relative theorycraft score labeled for this spec's primary role; not observed logs or simulated output.",
+    }
     return f"<script>window.COA_TOOLTIPS = {json.dumps(payload, sort_keys=True)};</script>"
 
 
@@ -444,6 +646,13 @@ def _anchor(value: str) -> str:
 
 
 def _label(value: str) -> str:
+    labels = {
+        "caster_dps": "Caster DPS",
+        "melee_dps": "Melee DPS",
+        "ranged_dps": "Ranged DPS",
+    }
+    if value in labels:
+        return labels[value]
     return value.replace("_", " ").title()
 
 

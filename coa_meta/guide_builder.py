@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .builder_tree_layout import load_builder_tree_layouts
 from .builds import BuildConfig
 from .guide_assets import GuideAssetCatalog
 from .guide_models import (
@@ -11,7 +12,7 @@ from .guide_models import (
     GuideSite,
     GuideSpec,
 )
-from .guide_tree import build_guide_tree
+from .guide_tree import build_guide_tree, build_guide_tree_panel
 from .guide_tooltips import build_node_tooltip, load_db_tooltip_rows
 from .reporting import MetaReport, slugify_key
 from .repository import TalentRepository
@@ -36,10 +37,12 @@ def build_guide_site(
     entries_path: Path | str,
     db_tooltips_path: Path | str | None = None,
     asset_root: Path | str | None = None,
+    builder_layout_root: Path | str | None = None,
 ) -> GuideSite:
     data = report.to_dict()
     repository = TalentRepository.from_entries(entries_path)
     db_rows = load_db_tooltip_rows(db_tooltips_path)
+    builder_layouts = load_builder_tree_layouts(builder_layout_root) if builder_layout_root else None
     assets = GuideAssetCatalog(asset_root)
     tooltips = {}
     specs = []
@@ -47,10 +50,11 @@ def build_guide_site(
     for result in data["spec_results"]:
         class_name = result["class_name"]
         spec_name = result["spec_name"]
+        source_spec_name = result.get("source_spec_name") or spec_name
         slug = f"{slugify_key(class_name)}-{slugify_key(spec_name)}"
         relevant_nodes = [
             node for node in repository.nodes_for_class(class_name)
-            if node.tab_name in {"Class", spec_name}
+            if node.tab_name in {"Class", source_spec_name}
         ]
         guide_nodes = []
         for node in sorted(relevant_nodes, key=lambda item: (item.tab_name != "Class", item.row, item.col, item.name)):
@@ -82,8 +86,11 @@ def build_guide_site(
                 repository=repository,
                 relevant_nodes=tuple(relevant_nodes),
                 guide_nodes=tuple(guide_nodes),
+                source_spec_name=str(source_spec_name),
                 max_ae=int(data.get("run_config", {}).get("max_ae") or 26),
                 max_te=int(data.get("run_config", {}).get("max_te") or 25),
+                builder_layout=builder_layouts.layout_for(class_name, str(source_spec_name)) if builder_layouts else None,
+                builder_layout_required=builder_layouts is not None,
             )
         )
         warnings = tuple(result.get("warnings", []))
@@ -95,6 +102,9 @@ def build_guide_site(
                 class_name=class_name,
                 spec_name=spec_name,
                 role=result["role"],
+                primary_role=str(result.get("primary_role") or result["role"]),
+                secondary_roles=tuple(str(role) for role in result.get("secondary_roles", [])),
+                roles=tuple(str(role) for role in result.get("roles", []) or [result["role"]]),
                 confidence_label=confidence,
                 warning_count=len(warnings),
                 summary=_summary_text(result),
@@ -125,8 +135,11 @@ def _build_cards(
     repository: TalentRepository,
     relevant_nodes: tuple,
     guide_nodes: tuple[GuideNode, ...],
+    source_spec_name: str,
     max_ae: int,
     max_te: int,
+    builder_layout,
+    builder_layout_required: bool,
 ) -> list[GuideBuildCard]:
     cards = []
     guide_nodes_by_id = {node.entry_id: node for node in guide_nodes}
@@ -139,7 +152,7 @@ def _build_cards(
         tree = build_guide_tree(
             repository=repository,
             class_name=str(result["class_name"]),
-            spec_name=str(result["spec_name"]),
+            spec_name=source_spec_name,
             build_rank=int(build["rank"]),
             build_label=label,
             selected_node_ids=node_ids,
@@ -152,12 +165,35 @@ def _build_cards(
             spec_nodes=relevant_nodes,
             guide_nodes_by_id=guide_nodes_by_id,
         )
+        tree_panel = build_guide_tree_panel(
+            repository=repository,
+            class_name=str(result["class_name"]),
+            source_spec_name=source_spec_name,
+            display_spec_name=str(result["spec_name"]),
+            build_rank=int(build["rank"]),
+            build_label=label,
+            selected_node_ids=node_ids,
+            config=BuildConfig(
+                class_name=str(result["class_name"]),
+                level=int(result["level"]),
+                max_ae=max_ae,
+                max_te=max_te,
+            ),
+            spec_nodes=relevant_nodes,
+            guide_nodes_by_id=guide_nodes_by_id,
+            builder_layout=builder_layout,
+            layout_required=builder_layout_required,
+            combined_tree=tree,
+        )
         cards.append(
             GuideBuildCard(
                 rank=int(build["rank"]),
                 label=label,
                 confidence_label=str(build["confidence_label"]),
                 projected_dps_index=float(build["projected_dps_index"]),
+                primary_index=float(build.get("primary_index", build["projected_dps_index"])),
+                primary_index_label=str(build.get("primary_index_label") or "Projected Damage Index"),
+                objective_id=str(build.get("objective_id") or "damage"),
                 node_ids=node_ids,
                 warnings=tuple(build.get("warnings", [])),
                 playstyle_label=label,
@@ -168,6 +204,7 @@ def _build_cards(
                 stat_priority_report=dict(build.get("stat_priority_report") or {}),
                 gear_recommendation_report=dict(build.get("gear_recommendation_report") or {}),
                 tree=tree,
+                tree_panel=tree_panel,
             )
         )
     return cards
@@ -188,6 +225,11 @@ def _summary_text(result: dict) -> str:
 
 def _metric_definitions() -> dict[str, GuideMetricDefinition]:
     return {
+        "primary_index": GuideMetricDefinition(
+            metric_id="primary_index",
+            label="Role-Specific Projected Index",
+            description="A relative theorycraft score labeled for this spec's primary role. It is not observed log or sim output.",
+        ),
         "projected_dps_index": GuideMetricDefinition(
             metric_id="projected_dps_index",
             label="Projected DPS Index",

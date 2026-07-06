@@ -20,7 +20,10 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 - `class_name`
 - `spec_id`
 - `spec_name`
-- `role`: player-facing guide role; one of `melee_dps`, `caster_dps`, `tank`, `healer`, or `support`
+- `role`: player-facing primary guide role; one of `melee_dps`, `caster_dps`, `ranged_dps`, `tank`, `healer`, or `support`
+- `primary_role`: same value as `role`, retained under a clearer guide-facing name
+- `secondary_roles`: optional extra guide roles for hybrid specs
+- `roles`: filter roles for the spec, including primary and secondary roles
 - `engine_role`: broad role used for existing scoring/APL/stat/gear compatibility; one of `dps`, `tank`, or `healer_support`
 - `role_provenance`: `coa-role-resolution-v1` payload describing role source, confidence, evidence, engine-role bridge, and role scores
 - `level`
@@ -36,6 +39,11 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 
 - `rank`
 - `projected_dps_index`
+- `primary_index`
+- `primary_index_label`
+- `objective_id`
+- `objective_breakdown`
+- `alternate_objective_scores`
 - `confidence_label`
 - `selected_nodes`
 - `score_breakdown`
@@ -55,6 +63,15 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 
 `projected_dps_index` is a theorycraft index. It is not raw DPS, simulated DPS, observed DPS, or empirical DPS.
 
+`primary_index` is the guide-facing score for the spec's primary role. During M1.11B it reuses the same underlying theorycraft score as `projected_dps_index`, but it is labeled by role:
+
+- Damage specs: `Projected Damage Index`
+- Healer specs: `Projected Healing Index`
+- Tank specs: `Projected Survival/Threat Index`
+- Support specs: `Projected Support Index`
+
+`objective_id` is one of `damage`, `healing`, `survival_threat`, or `support`. `objective_breakdown` groups score components by source key. `alternate_objective_scores` contains secondary-role payloads for hybrid specs.
+
 `rotation_summary` remains for backwards compatibility. New guide rendering should prefer `rotation_loop` when present.
 
 `playstyle_fingerprint` has schema version `coa-build-playstyle-v1` and summarizes selected node tags, active abilities, resources, schools, APL categories, and role cues for build comparison.
@@ -68,6 +85,9 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 `role_provenance` has schema version `coa-role-resolution-v1`:
 
 - `role`: player-facing role used by guide filters and section wording
+- `primary_role`: primary guide role
+- `secondary_roles`: additional guide roles for hybrid specs
+- `roles`: all guide-filter roles for this spec
 - `engine_role`: broad role routed into existing scoring and APL profile loaders
 - `source`: `authoritative`, `curated`, `inferred`, or `configured`
 - `confidence`: `high`, `medium`, or `low`
@@ -76,7 +96,7 @@ The meta report is the canonical Phase 1 theorycraft output. JSON is the source 
 
 The compatibility bridge is:
 
-- `melee_dps` and `caster_dps` -> `dps`
+- `melee_dps`, `caster_dps`, and `ranged_dps` -> `dps`
 - `tank` -> `tank`
 - `healer` and `support` -> `healer_support`
 
@@ -123,7 +143,9 @@ The M1.10 guide-site renderer keeps JSON canonical and avoids relying on HTML-on
 
 Implemented additions:
 
-- `role` expands from Phase 1's broad roles to `melee_dps`, `caster_dps`, `tank`, `healer`, and `support`, with role provenance.
+- `role` expands from Phase 1's broad roles to `melee_dps`, `caster_dps`, `ranged_dps`, `tank`, `healer`, and `support`, with role provenance.
+- `primary_role`, `secondary_roles`, and `roles` support hybrid guide filtering while keeping one primary scoring path.
+- Build results include role-specific objective index payloads while retaining `projected_dps_index` for compatibility.
 - Build results include a playstyle fingerprint, diversity-selection reason, performance-band metadata, and player-facing rotation loop.
 - Spec results should include guide navigation metadata, player-facing labels, and tooltip definitions for analyzer-only metrics.
 - Selected nodes should include enough tooltip/link/icon data for static guide rendering, or the renderer should join against normalized entries by `entry_id`.

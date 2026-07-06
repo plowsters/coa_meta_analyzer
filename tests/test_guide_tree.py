@@ -4,12 +4,14 @@ from pathlib import Path
 
 from coa_meta.builds import BuildConfig
 from coa_meta.guide_models import (
+    GuideBuildCard,
     GuideNodeGate,
     GuideTree,
     GuideTreeEdge,
+    GuideTreePanel,
     GuideTreeSnapshot,
 )
-from coa_meta.guide_tree import build_guide_tree, default_tree_levels
+from coa_meta.guide_tree import build_guide_tree, build_guide_tree_panel, default_tree_levels
 from coa_meta.repository import TalentRepository
 
 
@@ -89,3 +91,92 @@ def test_build_guide_tree_uses_coordinates_edges_and_snapshots():
     assert any(edge.source_id == 201 and edge.target_id == 202 for edge in tree.edges)
     assert any(snapshot.level == 60 for snapshot in tree.snapshots)
     assert {node.entry_id for node in tree.nodes if node.selected} >= {201, 202}
+
+
+def test_guide_tree_panel_splits_ability_talent_and_passive_groups():
+    repo = TalentRepository.from_entries(FIXTURES / "meta_report_fixture.jsonl")
+    nodes = tuple(
+        node for node in repo.nodes_for_class("Testclass")
+        if node.tab_name in {"Class", "Damage"}
+    )
+
+    panel = build_guide_tree_panel(
+        repository=repo,
+        class_name="Testclass",
+        source_spec_name="Damage",
+        display_spec_name="Damage",
+        build_rank=1,
+        build_label="Direct damage loop",
+        selected_node_ids=(201, 202),
+        config=BuildConfig(class_name="Testclass", level=60, max_ae=26, max_te=25),
+        spec_nodes=nodes,
+    )
+
+    assert isinstance(panel, GuideTreePanel)
+    assert {tree.tree_kind for tree in panel.trees} == {
+        "ability_essence",
+        "talent_essence",
+        "level_passives",
+    }
+    ability_tree = next(tree for tree in panel.trees if tree.tree_kind == "ability_essence")
+    talent_tree = next(tree for tree in panel.trees if tree.tree_kind == "talent_essence")
+    passive_lane = next(tree for tree in panel.trees if tree.tree_kind == "level_passives")
+
+    assert ability_tree.layout_source == "normalized_fallback"
+    assert {node.entry_id for node in ability_tree.nodes} == {101, 102}
+    assert {node.entry_id for node in talent_tree.nodes} == {201, 202}
+    assert {node.entry_id for node in passive_lane.nodes} == {100}
+    assert all(node.ae_cost > 0 and node.essence_kind == "ability" for node in ability_tree.nodes)
+    assert all(node.te_cost > 0 and node.essence_kind == "talent" for node in talent_tree.nodes)
+    assert all(node.ae_cost == 0 and node.te_cost == 0 for node in passive_lane.nodes)
+
+
+def test_build_card_serializes_tree_panel_and_legacy_tree():
+    legacy_tree = GuideTree(
+        tree_id="testclass-damage-1",
+        class_name="Testclass",
+        spec_name="Damage",
+        build_rank=1,
+        build_label="Direct damage loop",
+        level=60,
+        max_ae=26,
+        max_te=25,
+        ae_spent=0,
+        te_spent=0,
+        rows=1,
+        cols=1,
+        nodes=tuple(),
+        edges=tuple(),
+        snapshots=tuple(),
+        warnings=tuple(),
+    )
+    panel = GuideTreePanel(
+        tree_panel_id="testclass-damage-1",
+        class_name="Testclass",
+        source_spec_name="Damage",
+        display_spec_name="Damage",
+        build_rank=1,
+        build_label="Direct damage loop",
+        level=60,
+        max_ae=26,
+        max_te=25,
+        trees=(legacy_tree,),
+        snapshots=tuple(),
+        warnings=tuple(),
+    )
+    card = GuideBuildCard(
+        rank=1,
+        label="Direct damage loop",
+        confidence_label="medium",
+        projected_dps_index=101.0,
+        node_ids=tuple(),
+        warnings=tuple(),
+        tree=legacy_tree,
+        tree_panel=panel,
+    )
+
+    payload = card.to_dict()
+
+    assert payload["tree"]["schema_version"] == "coa-guide-tree-v1"
+    assert payload["tree_panel"]["schema_version"] == "coa-guide-tree-panel-v1"
+    assert payload["tree_panel"]["trees"][0]["tree_kind"] == "combined"

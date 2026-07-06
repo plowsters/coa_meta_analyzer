@@ -17,7 +17,9 @@ from .build_diversity import (
     select_diverse_builds,
 )
 from .builds import BuildConfig, BuildRules
+from .display_names import display_spec_name
 from .domain import TalentNode
+from .objectives import objective_for_role
 from .profiles import load_profile_by_role
 from .repository import TalentRepository
 from .roles import (
@@ -262,11 +264,24 @@ class BuildReport:
     selection_reason: dict[str, Any]
     rotation_loop: dict[str, Any]
     warnings: tuple[str, ...]
+    primary_index: float | None = None
+    primary_index_label: str = ""
+    objective_id: str = ""
+    objective_breakdown: dict[str, float] | None = None
+    alternate_objective_scores: dict[str, dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        primary_index = self.primary_index if self.primary_index is not None else self.projected_dps_index
         return {
             "rank": self.rank,
             "projected_dps_index": self.projected_dps_index,
+            "primary_index": primary_index,
+            "primary_index_label": self.primary_index_label or "Projected Damage Index",
+            "objective_id": self.objective_id or "damage",
+            "objective_breakdown": dict(self.objective_breakdown or {}),
+            "alternate_objective_scores": {
+                role: dict(payload) for role, payload in (self.alternate_objective_scores or {}).items()
+            },
             "confidence_label": self.confidence_label,
             "selected_nodes": list(self.selected_nodes),
             "score_breakdown": self.score_breakdown,
@@ -302,13 +317,24 @@ class SpecResult:
     summary: dict[str, Any]
     top_builds: tuple[BuildReport, ...]
     warnings: tuple[str, ...]
+    primary_role: str = ""
+    secondary_roles: tuple[str, ...] = tuple()
+    roles: tuple[str, ...] = tuple()
 
     def to_dict(self) -> dict[str, Any]:
+        display_name = display_spec_name(self.class_name, self.spec_name)
+        primary_role = self.primary_role or self.role
+        secondary_roles = self.secondary_roles
+        roles = self.roles or tuple(dict.fromkeys((primary_role, *secondary_roles)))
         return {
             "class_name": self.class_name,
             "spec_id": self.spec_id,
-            "spec_name": self.spec_name,
+            "spec_name": display_name,
+            "source_spec_name": self.spec_name,
             "role": self.role,
+            "primary_role": primary_role,
+            "secondary_roles": list(secondary_roles),
+            "roles": list(roles),
             "engine_role": self.engine_role,
             "role_provenance": self.role_provenance,
             "level": self.level,
@@ -540,6 +566,12 @@ class MetaReportRunner:
                 engine_role=engine_role,
                 items=tuple(),
             ).to_dict()
+            objective = objective_for_role(
+                role,
+                scored.projected_dps_index,
+                scored.components,
+                secondary_roles=role_resolution.secondary_roles,
+            )
             selected_nodes = tuple(_node_to_report(repository.node_by_id(node_id)) for node_id in sorted(result.state.selected_ids))
             selection_reason = candidate.selection_reason
             top_builds.append(
@@ -569,6 +601,11 @@ class MetaReportRunner:
                     selection_reason=selection_reason.to_dict() if selection_reason else {},
                     rotation_loop=payload["rotation_loop"].to_dict(),
                     warnings=payload["warnings"],
+                    primary_index=objective.primary_index,
+                    primary_index_label=objective.primary_index_label,
+                    objective_id=objective.objective_id,
+                    objective_breakdown=objective.objective_breakdown,
+                    alternate_objective_scores=objective.alternate_objective_scores,
                 )
             )
         if not top_builds:
@@ -588,6 +625,9 @@ class MetaReportRunner:
             summary=_spec_summary(scope, role, top_builds, warnings),
             top_builds=tuple(top_builds),
             warnings=tuple(warnings),
+            primary_role=role_resolution.role,
+            secondary_roles=role_resolution.secondary_roles,
+            roles=role_resolution.roles,
         )
 
 
@@ -629,7 +669,8 @@ def _spec_summary(scope: BuildScope, role: str, top_builds: list[BuildReport], w
     return {
         "schema_version": "coa-spec-summary-v1",
         "class_name": scope.class_name,
-        "spec_name": scope.spec_name,
+        "spec_name": display_spec_name(scope.class_name, scope.spec_name),
+        "source_spec_name": scope.spec_name,
         "role": role,
         "best_projected_dps_index": best.projected_dps_index if best else None,
         "data_confidence": best.confidence_label if best else "low",
@@ -649,6 +690,8 @@ def _summary_strengths(best: BuildReport | None, role: str) -> list[str]:
         return ["Prioritizes group utility, aura uptime, and flexible support tools from normalized tags."]
     if role == "caster_dps":
         return ["Prioritizes spell damage, effects, cooldown, and proc features from normalized tags."]
+    if role == "ranged_dps":
+        return ["Prioritizes ranged damage, uptime, cooldown, and proc features from normalized tags."]
     return ["Prioritizes melee damage, resource, cooldown, and proc features from normalized tags."]
 
 
@@ -692,7 +735,8 @@ def _class_summaries(spec_results: tuple[SpecResult, ...]) -> tuple[dict[str, An
             {
                 "class_name": class_name,
                 "spec_count": len(rows),
-                "best_spec_name": best.spec_name if best else None,
+                "best_spec_name": display_spec_name(best.class_name, best.spec_name) if best else None,
+                "source_best_spec_name": best.spec_name if best else None,
                 "best_projected_dps_index": best.top_builds[0].projected_dps_index if best else None,
                 "summary_note": "Derived from per-spec projected build rankings.",
             }
@@ -742,6 +786,7 @@ def render_html_report(
     asset_resolver: Any | None = None,
     entries_path: Path | str | None = None,
     db_tooltips_path: Path | str | None = None,
+    builder_layout_root: Path | str | None = None,
 ) -> str:
     if entries_path is not None:
         from .guide_writer import render_guide_index_html
@@ -751,6 +796,7 @@ def render_html_report(
             entries_path=entries_path,
             db_tooltips_path=db_tooltips_path,
             asset_root=getattr(asset_resolver, "asset_root", None),
+            builder_layout_root=builder_layout_root,
         )
 
     data = report.to_dict()
@@ -922,6 +968,7 @@ def write_report_outputs(
     asset_resolver: Any | None = None,
     entries_path: Path | str | None = None,
     db_tooltips_path: Path | str | None = None,
+    builder_layout_root: Path | str | None = None,
 ) -> tuple[Path, ...]:
     output_dir = Path(out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -944,6 +991,7 @@ def write_report_outputs(
                         entries_path=entries_path,
                         db_tooltips_path=db_tooltips_path,
                         asset_root=getattr(asset_resolver, "asset_root", None),
+                        builder_layout_root=builder_layout_root,
                     )
                 )
                 continue
