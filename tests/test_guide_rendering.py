@@ -108,6 +108,14 @@ def test_index_places_hybrid_specs_in_secondary_role_sections():
     assert 'data-role-chip="support"' in html
 
 
+def test_index_spec_cards_render_spec_icon_image():
+    html = render_index_html(_site())
+
+    assert 'class="spec-icon"' in html
+    segment = html.split('class="spec-icon"', 1)[1][:200]
+    assert "<img" in segment
+
+
 def test_render_spec_html_includes_sections_and_omits_empty_warnings():
     site = _site()
     spec = next(item for item in site.specs if item.spec_name == "Damage")

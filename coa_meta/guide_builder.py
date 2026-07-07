@@ -102,6 +102,10 @@ def build_guide_site(
         )
         warnings = tuple(result.get("warnings", []))
         confidence = builds[0].confidence_label if builds else "low"
+        spec_icon = next(
+            (node.asset for node in guide_nodes if node.tab_name == source_spec_name and not node.asset.missing),
+            next((node.asset for node in guide_nodes if not node.asset.missing), None),
+        )
         specs.append(
             GuideSpec(
                 slug=slug,
@@ -120,6 +124,7 @@ def build_guide_site(
                 nodes=tuple(guide_nodes),
                 warnings=warnings,
                 role_provenance=dict(result.get("role_provenance") or {}),
+                icon_asset=spec_icon,
             )
         )
 

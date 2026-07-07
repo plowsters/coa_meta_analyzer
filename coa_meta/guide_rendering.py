@@ -40,6 +40,16 @@ a { color: var(--fel); }
 .empty-role { color: var(--muted); margin: 0; }
 .guide-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 22px; }
 .guide-card, .panel { border: 1px solid var(--border); background: rgba(19,11,30,.92); border-radius: 8px; padding: 18px; }
+.spec-icon { display: inline-flex; width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; border-radius: 6px; overflow: hidden; }
+.spec-icon img { width: 100%; height: 100%; object-fit: cover; }
+.spec-icon-mono { align-items: center; justify-content: center; background: rgba(143,92,255,.18); color: var(--text); font-size: 12px; }
+.site-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 4px; }
+.site-brand { font-weight: 600; color: var(--text); text-decoration: none; }
+.github-link { color: var(--muted); display: inline-flex; transition: color .15s ease; }
+.github-link:hover { color: var(--fel); }
+.site-footer { margin-top: 32px; padding: 18px 4px; border-top: 1px solid rgba(143,92,255,.25); color: var(--muted); font-size: 13px; }
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--fel); }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .85rem; }
 .warning { border-color: rgba(245,197,66,.55); color: var(--warning); }
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
@@ -279,12 +289,21 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
     )
 
 
+def _render_spec_icon(spec: GuideSpec, asset_prefix: str = "assets") -> str:
+    asset = getattr(spec, "icon_asset", None)
+    if asset and asset.href and not asset.missing:
+        src = _asset_src(asset.href, asset_prefix)
+        return f'<span class="spec-icon"><img src="{_e(src)}" alt="" loading="lazy"></span>'
+    initials = "".join(word[:1] for word in spec.class_name.split()[:2]).upper() or spec.class_name[:2].upper()
+    return f'<span class="spec-icon spec-icon-mono">{_e(initials)}</span>'
+
+
 def _render_spec_card(spec: GuideSpec) -> str:
     warning = '<span class="chip warning">Warnings</span>' if spec.warning_count else ""
     role_values = " ".join(_spec_roles(spec))
     return (
         f'<article class="guide-card" data-role="{_e(role_values)}">'
-        f"<h2>{_e(spec.class_name)} - {_e(spec.spec_name)}</h2>"
+        f"<h2>{_render_spec_icon(spec)} {_e(spec.class_name)} - {_e(spec.spec_name)}</h2>"
         f"<p>{_e(spec.summary)}</p><p>{_role_chips(spec)} {warning}</p>"
         f'<p><a href="{_e(spec.href)}">Open guide</a></p></article>'
     )

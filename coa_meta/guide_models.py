@@ -303,6 +303,7 @@ class GuideSpec:
     primary_role: str = ""
     secondary_roles: tuple[str, ...] = tuple()
     roles: tuple[str, ...] = tuple()
+    icon_asset: GuideAsset | None = None
 
     def to_dict(self) -> dict[str, Any]:
         primary_role = self.primary_role or self.role
