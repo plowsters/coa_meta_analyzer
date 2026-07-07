@@ -179,7 +179,7 @@ GUIDE_JS = """
     emberCanvas = document.createElement("canvas");
     emberCanvas.setAttribute("data-embers", "");
     emberCanvas.setAttribute("aria-hidden", "true");
-    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;";
+    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;";
     document.body.insertBefore(emberCanvas, document.body.firstChild);
     emberCtx = emberCanvas.getContext("2d");
     sizeEmberCanvas();
