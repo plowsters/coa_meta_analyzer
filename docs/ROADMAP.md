@@ -234,6 +234,44 @@ Exit criteria:
 - Rotation sections are concise player guidance, not full-kit category dumps.
 - Full tests pass and the real artifact smoke command can generate JSON, Markdown, and HTML reports.
 
+### Phase 1 Continuation: Public Release and Systems Correctness (M1.12–M1.20)
+
+The M1.11 first pass is useful but not yet a defensible public resource: it depends on a stale
+db.ascension.gg source, its calculators do not model WoW's actual power systems, and it has visible
+correctness/UX gaps. Milestones M1.12–M1.20 take the tool to a public GitHub Pages release whose
+numbers are grounded in the real game systems. Full decomposition, findings, and strategic decisions
+are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpowers/specs/2026-07-06-m1-12-to-m1-20-public-release-roadmap-design.md).
+
+- **M1.12 Public-Release UI Quick Fixes.** Status: implemented. Icons on nodes and spec cards
+  (AscensionDB hotlink), select-to-include role filter, updated disclaimer, header GitHub link,
+  footer, and removal of leveling-path boilerplate. No engine/data changes. Design:
+  [M1.12 UI Quick Fixes](superpowers/specs/2026-07-06-m1-12-public-release-ui-quick-fixes-design.md).
+  Plan: [M1.12 Implementation Plan](superpowers/plans/2026-07-06-m1-12-public-release-ui-quick-fixes.md).
+- **M1.13 Fel/Void Site Redesign.** Status: planned. Externally sourced Claude Design fel/void
+  redesign; M1.12 wiring is inherited and restyled. Assets land later in an uncommitted project-root
+  folder.
+- **M1.14 Client DBC Data Foundation.** Status: planned. Extract authoritative mechanical spell data
+  and WoW conversion primitives from the CoA client (MPQ→DBC and `Data/Content/*.json`);
+  client-native CoA attribution with the Builder payload as a cross-validation oracle; sunset stale
+  db mechanical enrichment; test-suite integrity audit; memory-bridge/API spike. Design:
+  [M1.14 Client DBC Data Foundation](superpowers/specs/2026-07-06-m1-14-client-dbc-data-foundation-design.md).
+- **M1.15 Talent-Tree Correctness.** Status: planned. Full AE/TE essence spend to the target level;
+  granular 10–60 level slider; consistent level-gating across all sections; mutually exclusive
+  shared-node choices; leveling path never skips a level.
+- **M1.16 Analytical Player-Power Model.** Status: planned. Deterministic engine: rating→% at level,
+  coefficient-based per-cast damage/heal, haste→GCD and resource regen, crit/hit/expertise/armor,
+  DoT/HoT. Rewire scoring and rotation simulation to consume real numbers. Full event-driven
+  simulation remains Phase 3.
+- **M1.17 Rotation Quality.** Status: planned. Derive true core loops from the model; build-archetype
+  taxonomy beyond "DoT loop"; concise opener/priority/cooldown/role sections.
+- **M1.18 Gear/Stat Interaction and Breakpoints.** Status: planned. Model-derived stat weights per
+  level; haste/other breakpoints that flip build ranking; leveling stat scaling; item stat sourcing
+  where AtlasLoot lacks Ascension gear.
+- **M1.19 Multi-Build Selection Re-tune.** Status: planned. Revisit the "too strict" performance-band
+  and diversity selection once model-backed scores exist.
+- **M1.20 Public-Resource Hardening.** Status: planned. GitHub Pages deploy pipeline, CI, regression
+  snapshots, changelog-as-currency drift verification, contribution docs.
+
 ## Phase 2: Data-Driven Calibration Release
 
 Purpose: make the tool learn from real combat data. Phase 2 uses combat logs and addon snapshots to calibrate the Phase 1 theorycraft model. It still should not require a full simulator, but it should correct weights, proc assumptions, uptime assumptions, and target-count behavior from evidence.

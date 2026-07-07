@@ -186,3 +186,46 @@ Reasoning:
 - The normalized layout already produces correct, readable trees across all specs without the live builder runtime.
 - Chasing exact builder DOM/screenshot parity adds capture and maintenance cost without improving guide usefulness.
 - Keeping the checklist as an optional spot-check preserves a path to investigate if a future spec ever renders poorly.
+
+## Decision 18: The WoW Client Is the Authoritative Mechanical Source; CoA Attribution Is Client-Native
+
+Status: accepted (planned for M1.14).
+
+The local Ascension CoA game client (MPQ→DBC plus `Data/Content/*.json`) is the authoritative source
+for mechanical spell data and WoW systems constants, layered additively onto the existing pipeline.
+db.ascension.gg is demoted from a canonical enrichment source to fallback-only for mechanical fields,
+because it is demonstrably stale (spell `805775` returns the outdated *Fang Venom: Lifeblood* rather
+than the current *Adrenal Venom*). The CoA Builder payload remains authoritative for the talent
+graph, legality, and node descriptions (extends Decision 1 and Decision 15).
+
+CoA attribution is derived from client-native signals — primarily archive-family membership
+(`patch-C*` = CoA, `area-52/` = Area-52, `patch-W*` = Reborn), plus ID range and specialization/
+skill-line markers. The CoA Builder payload is used only as a cross-validation oracle to measure the
+attribution heuristic's precision/recall. It is never a whitelist gate.
+
+Reasoning:
+
+- Using the Builder as a whitelist would silently make it canonical over the client, discard the
+  richer client-only data the Builder never exposed, and leave the tool dependent on a source that
+  can drift or go offline.
+- The client is current (CoA patch archives are updated in real time) and richer than any web source.
+- Custom server-side scaling/proc numbers and 3.3.5 item stats are not fully present in client DBC;
+  those gaps are scoped to a memory-bridge/API investigation spike and to later gear milestones.
+
+## Decision 19: Phase 1 Uses a Deterministic Analytical Player-Power Model
+
+Status: accepted (planned for M1.16).
+
+Phase 1 replaces the current keyword/constant heuristics with a deterministic analytical model of WoW
+player power — rating→% conversions at level, coefficient-based per-cast damage/heal, haste→GCD and
+resource regen, crit/hit/expertise/armor, and DoT/HoT — labeled as projection. The full event-driven
+Monte-Carlo simulator remains Phase 3 (Decision 7). The modeling core is split: its inputs
+(mechanical fields and conversion primitives) are delivered by the client data foundation (M1.14),
+and the engine that consumes them is a dedicated milestone (M1.16), with talent-tree correctness
+(M1.15) between them.
+
+Reasoning:
+
+- A tool that presents authoritative-looking numbers from a mechanically hollow model is worse than
+  no tool; the analytical model makes Phase 1 numbers defensible without a full simulator.
+- Accurate modeling depends on accurate ability data, so it must follow the client data foundation.

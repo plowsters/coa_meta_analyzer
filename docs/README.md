@@ -145,4 +145,12 @@ M1.10E/F, player-facing role taxonomy plus clearer stat and gear presentation, i
 
 The CoA Builder tree renderer produces faithful trees across specs; pixel-level builder DOM/screenshot parity was evaluated and judged unnecessary (see [DECISIONS.md](DECISIONS.md) Decision 17). The remaining first-pass areas — backend trust scoring (M1.11G) and rotation reliability (M1.11E) — are intentionally Phase 2-gated on empirical logs.
 
-After M1.11, the next major planning focus is Phase 2 data collection, AscensionLogs/addon calibration, and the Vercel free-tier personal upload/simulation workflow.
+After M1.11, the Phase 1 continuation (M1.12–M1.20) takes the tool to a public GitHub Pages release
+whose numbers model WoW's actual power systems. **M1.12 (public-release UI quick fixes) is
+implemented**: icons on nodes and spec cards (AscensionDB hotlink), a select-to-include role filter,
+updated disclaimer copy, a header GitHub link, a footer, and removal of leveling-path boilerplate.
+M1.13 (fel/void redesign), M1.14 (client DBC data foundation), M1.15 (talent-tree correctness),
+M1.16 (analytical player-power model), and M1.17–M1.20 are planned. See
+[M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpowers/specs/2026-07-06-m1-12-to-m1-20-public-release-roadmap-design.md).
+Phase 2 data collection, AscensionLogs/addon calibration, and the Vercel personal
+upload/simulation workflow remain the next major cross-phase focus.
