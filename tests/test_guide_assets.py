@@ -5,12 +5,22 @@ from pathlib import Path
 from coa_meta.guide_assets import GuideAssetCatalog
 
 
-def test_icon_placeholder_is_deterministic_without_asset_root():
+def test_icon_resolves_remote_ascensiondb_url_without_local_asset():
     catalog = GuideAssetCatalog()
 
     asset = catalog.icon_for("Interface\\Icons\\Shared_Strike", "Shared Strike")
 
     assert asset.asset_id == "icon:sharedstrike"
+    assert asset.href == "https://db.ascension.gg/static/images/wow/icons/large/shared_strike.jpg"
+    assert asset.missing is False
+    assert asset.source == "ascension_db_remote"
+
+
+def test_icon_falls_back_to_placeholder_without_slug_or_asset():
+    catalog = GuideAssetCatalog()
+
+    asset = catalog.icon_for("", "Adrenal Venom")
+
     assert asset.href is None
     assert asset.missing is True
     assert asset.source == "placeholder"

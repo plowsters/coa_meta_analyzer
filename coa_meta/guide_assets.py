@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .guide_models import GuideAsset
+
+ASCENSIONDB_ICON_URL_TEMPLATE = "https://db.ascension.gg/static/images/wow/icons/large/{icon}.jpg"
 
 
 class GuideAssetCatalog:
@@ -24,16 +27,7 @@ class GuideAssetCatalog:
             return self._assets[asset_id]
 
         path = self._find_local_icon(slug)
-        if path is None:
-            asset = GuideAsset(
-                asset_id=asset_id,
-                kind="icon",
-                label=label,
-                href=None,
-                source="placeholder",
-                missing=True,
-            )
-        else:
+        if path is not None:
             asset = GuideAsset(
                 asset_id=asset_id,
                 kind="icon",
@@ -43,6 +37,26 @@ class GuideAssetCatalog:
                 missing=False,
                 source_path=str(path),
             )
+        else:
+            url_slug = _icon_url_slug(icon or "")
+            if url_slug:
+                asset = GuideAsset(
+                    asset_id=asset_id,
+                    kind="icon",
+                    label=label,
+                    href=ASCENSIONDB_ICON_URL_TEMPLATE.format(icon=url_slug),
+                    source="ascension_db_remote",
+                    missing=False,
+                )
+            else:
+                asset = GuideAsset(
+                    asset_id=asset_id,
+                    kind="icon",
+                    label=label,
+                    href=None,
+                    source="placeholder",
+                    missing=True,
+                )
         self._assets[asset_id] = asset
         return asset
 
@@ -80,6 +94,13 @@ class GuideAssetCatalog:
 
 def _asset_slug(value: str) -> str:
     return "".join(char for char in value.lower() if char.isalnum())
+
+
+def _icon_url_slug(value: str) -> str:
+    stem = value.replace("\\", "/").split("/")[-1]
+    stem = re.sub(r"\.(blp|png|jpg|jpeg|webp)$", "", stem, flags=re.IGNORECASE)
+    stem = re.sub(r"[^a-z0-9]+", "_", stem.lower())
+    return stem.strip("_")
 
 
 def _asset_href(local_path: str, asset_root: Path | None) -> str:

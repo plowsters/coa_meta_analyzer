@@ -64,7 +64,7 @@ def build_guide_site(
             tooltip = build_node_tooltip(node, db_rows)
             tooltips[tooltip.tooltip_id] = tooltip
             asset = assets.icon_for(
-                str((db_row or {}).get("icon") or node.raw.get("icon") or node.raw.get("iconPath") or node.name),
+                str((db_row or {}).get("icon") or node.raw.get("icon") or node.raw.get("iconPath") or ""),
                 node.name,
                 local_path=(db_row or {}).get("icon_asset_path"),
             )
