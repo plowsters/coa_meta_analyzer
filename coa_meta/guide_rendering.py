@@ -128,32 +128,28 @@ GUIDE_JS = """
     if (!filter) return;
     const buttons = Array.from(document.querySelectorAll("[data-role-filter]"));
     const roleButtons = buttons.filter(button => button.getAttribute("data-role-filter") !== "all");
-    const selectedRoles = new Set(roleButtons.filter(button => button.getAttribute("aria-pressed") === "true").map(button => button.getAttribute("data-role-filter")));
-    if (filter.getAttribute("data-role-filter") === "all") {
-      selectedRoles.clear();
-      roleButtons.forEach(button => selectedRoles.add(button.getAttribute("data-role-filter")));
-    } else {
-      const role = filter.getAttribute("data-role-filter");
-      if (selectedRoles.has(role)) selectedRoles.delete(role);
-      else selectedRoles.add(role);
-    }
+    const allButton = buttons.find(button => button.getAttribute("data-role-filter") === "all");
+    const selected = new Set(roleButtons.filter(button => button.getAttribute("aria-pressed") === "true").map(button => button.getAttribute("data-role-filter")));
+    const clicked = filter.getAttribute("data-role-filter");
+    if (clicked === "all") selected.clear();
+    else if (selected.has(clicked)) selected.delete(clicked);
+    else selected.add(clicked);
+    const showAll = selected.size === 0;
     roleButtons.forEach(button => {
-      const active = selectedRoles.has(button.getAttribute("data-role-filter"));
+      const active = selected.has(button.getAttribute("data-role-filter"));
       button.setAttribute("aria-pressed", String(active));
       button.classList.toggle("is-active", active);
     });
-    const allSelected = roleButtons.every(button => selectedRoles.has(button.getAttribute("data-role-filter")));
-    const allButton = buttons.find(button => button.getAttribute("data-role-filter") === "all");
     if (allButton) {
-      allButton.setAttribute("aria-pressed", String(allSelected));
-      allButton.classList.toggle("is-active", allSelected);
+      allButton.setAttribute("aria-pressed", String(showAll));
+      allButton.classList.toggle("is-active", showAll);
     }
     document.querySelectorAll("[data-role]").forEach(card => {
       const roles = (card.getAttribute("data-role") || "").split(/\\s+/).filter(Boolean);
-      card.hidden = !roles.some(role => selectedRoles.has(role));
+      card.hidden = showAll ? false : !roles.some(role => selected.has(role));
     });
     document.querySelectorAll("[data-role-section]").forEach(section => {
-      section.hidden = !selectedRoles.has(section.getAttribute("data-role-section"));
+      section.hidden = showAll ? false : !selected.has(section.getAttribute("data-role-section"));
     });
   });
   function parseJson(value, fallback) {
@@ -240,7 +236,7 @@ def render_index_html(site: GuideSite) -> str:
     filters = '<div class="role-filter-bar" aria-label="Filter guides by role">'
     filters += '<button class="role-filter is-active" data-role-filter="all" aria-pressed="true">All Roles</button>'
     filters += "".join(
-        f'<button class="role-filter is-active" data-role-filter="{_e(role)}" aria-pressed="true">{_e(_label(role))}</button>'
+        f'<button class="role-filter" data-role-filter="{_e(role)}" aria-pressed="false">{_e(_label(role))}</button>'
         for role in roles
     )
     filters += "</div>"

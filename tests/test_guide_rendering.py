@@ -93,8 +93,18 @@ def test_index_groups_specs_by_role_and_supports_multi_role_filters():
     assert "Ranged DPS" in html
     assert "Melee DPS" in html
     assert 'aria-pressed="true"' in html
-    assert "selectedRoles" in GUIDE_JS
+    assert "selected.has(clicked)" in GUIDE_JS
     assert "data-role-section" in html
+
+
+def test_role_filter_defaults_to_all_and_roles_start_unpressed():
+    html = render_index_html(_site())
+
+    all_button = html.split('data-role-filter="all"', 1)[1][:120]
+    assert 'aria-pressed="true"' in all_button
+    melee_button = html.split('data-role-filter="melee_dps"', 1)[1][:120]
+    assert 'aria-pressed="false"' in melee_button
+    assert "selected.size === 0" in GUIDE_JS
 
 
 def test_index_places_hybrid_specs_in_secondary_role_sections():
