@@ -403,6 +403,15 @@ def test_static_assets_have_fel_void_theme_and_no_network_fetch():
     assert "fetch(" not in GUIDE_JS
 
 
+def test_tooltip_js_supports_multi_pin_and_escape():
+    assert "window.COA_TOOLTIPS" in GUIDE_JS      # catalog lookup retained
+    assert "Escape" in GUIDE_JS                    # esc clears
+    assert "pins" in GUIDE_JS                      # stackable pins
+    assert "is-pinned" in GUIDE_JS                 # gold-border class toggled
+    assert 'addEventListener("scroll"' in GUIDE_JS # re-glue on scroll
+    assert "fetch(" not in GUIDE_JS
+
+
 def test_header_has_theme_toggle_and_js_persists_choice():
     html = render_index_html(_site())
     assert "data-theme-toggle" in html

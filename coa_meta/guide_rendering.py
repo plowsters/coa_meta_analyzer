@@ -134,6 +134,7 @@ a { color: var(--lead); }
 .leveling-path { margin-top: 14px; display: grid; gap: 8px; }
 .leveling-path li { margin-bottom: 4px; color: var(--muted); }
 .tooltip { position: fixed; z-index: 20; max-width: 360px; padding: 12px; border: 1px solid var(--accent); border-radius: 8px; background: #09050f; box-shadow: 0 0 28px rgba(143,92,255,.25); }
+.tooltip.is-pinned { border-color: var(--gold); box-shadow: 0 0 24px rgba(var(--gold-rgb),.32); }
 .tooltip table { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .tooltip th, .tooltip td { border: 1px solid rgba(143,92,255,.3); padding: 4px 6px; text-align: left; vertical-align: top; }
 .theme-toggle { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; background: var(--panel-2); }
@@ -209,31 +210,73 @@ GUIDE_JS = """
   }
   document.addEventListener("DOMContentLoaded", startEmbers);
   const tooltipData = window.COA_TOOLTIPS || {};
-  let active;
-  function removeTooltip() {
-    if (active) active.remove();
-    active = null;
-  }
-  function showTooltip(target) {
-    const id = target.getAttribute("data-tooltip-id");
+  const pins = new Map();
+  let hoverEl = null, hoverAnchor = null;
+  function makeTip(id, pinned) {
     const tip = tooltipData[id];
-    if (!tip) return;
-    removeTooltip();
-    active = document.createElement("div");
-    active.className = "tooltip";
-    active.innerHTML = tip.html || tip.text || "";
-    document.body.appendChild(active);
-    const rect = target.getBoundingClientRect();
-    active.style.left = Math.min(rect.left, window.innerWidth - active.offsetWidth - 16) + "px";
-    active.style.top = Math.min(rect.bottom + 8, window.innerHeight - active.offsetHeight - 16) + "px";
+    if (!tip) return null;
+    const el = document.createElement("div");
+    el.className = "tooltip" + (pinned ? " is-pinned" : "");
+    el.innerHTML = tip.html || tip.text || "";
+    document.body.appendChild(el);
+    return el;
+  }
+  function placeTip(el, anchor) {
+    const rect = anchor.getBoundingClientRect();
+    el.style.left = Math.min(rect.left, window.innerWidth - el.offsetWidth - 16) + "px";
+    el.style.top = Math.min(rect.bottom + 8, window.innerHeight - el.offsetHeight - 16) + "px";
+  }
+  function clearHover() {
+    if (hoverEl) hoverEl.remove();
+    hoverEl = null; hoverAnchor = null;
+  }
+  function showHover(anchor) {
+    const id = anchor.getAttribute("data-tooltip-id");
+    if (!id || pins.has(id)) return;
+    clearHover();
+    hoverEl = makeTip(id, false); hoverAnchor = anchor;
+    if (hoverEl) placeTip(hoverEl, anchor);
+  }
+  function togglePin(anchor) {
+    const id = anchor.getAttribute("data-tooltip-id");
+    if (!id) return;
+    if (pins.has(id)) {
+      pins.get(id).el.remove(); pins.delete(id);
+      return;
+    }
+    clearHover();
+    const el = makeTip(id, true);
+    if (!el) return;
+    pins.set(id, { el, anchor }); placeTip(el, anchor);
+  }
+  function repositionPins() {
+    pins.forEach(pin => placeTip(pin.el, pin.anchor));
+    if (hoverEl && hoverAnchor) placeTip(hoverEl, hoverAnchor);
   }
   document.addEventListener("mouseover", event => {
     const target = event.target.closest("[data-tooltip-id]");
-    if (target) showTooltip(target);
+    if (target) showHover(target);
+  });
+  document.addEventListener("focusin", event => {
+    const target = event.target.closest("[data-tooltip-id]");
+    if (target) showHover(target);
   });
   document.addEventListener("mouseout", event => {
-    if (event.target.closest("[data-tooltip-id]")) removeTooltip();
+    if (event.target.closest("[data-tooltip-id]")) clearHover();
   });
+  document.addEventListener("click", event => {
+    const target = event.target.closest("[data-tooltip-id]");
+    if (target) togglePin(target);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      clearHover();
+      pins.forEach(pin => pin.el.remove());
+      pins.clear();
+    }
+  });
+  window.addEventListener("scroll", repositionPins, true);
+  window.addEventListener("resize", repositionPins);
   document.addEventListener("click", event => {
     const filter = event.target.closest("[data-role-filter]");
     if (!filter) return;
