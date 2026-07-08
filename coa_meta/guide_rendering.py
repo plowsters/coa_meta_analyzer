@@ -262,11 +262,24 @@ GUIDE_JS = """
     if (target) showHover(target);
   });
   document.addEventListener("mouseout", event => {
-    if (event.target.closest("[data-tooltip-id]")) clearHover();
+    const target = event.target.closest("[data-tooltip-id]");
+    if (!target) return;
+    const related = event.relatedTarget;
+    if (related && target.contains(related)) return;
+    clearHover();
+  });
+  document.addEventListener("focusout", event => {
+    const target = event.target.closest("[data-tooltip-id]");
+    if (!target || target !== hoverAnchor) return;
+    const related = event.relatedTarget;
+    if (related && target.contains(related)) return;
+    clearHover();
   });
   document.addEventListener("click", event => {
     const target = event.target.closest("[data-tooltip-id]");
-    if (target) togglePin(target);
+    if (!target) return;
+    event.preventDefault();
+    togglePin(target);
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {

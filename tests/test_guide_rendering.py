@@ -409,6 +409,10 @@ def test_tooltip_js_supports_multi_pin_and_escape():
     assert "pins" in GUIDE_JS                      # stackable pins
     assert "is-pinned" in GUIDE_JS                 # gold-border class toggled
     assert 'addEventListener("scroll"' in GUIDE_JS # re-glue on scroll
+    assert "event.preventDefault()" in GUIDE_JS    # linked tooltip targets pin instead of navigate
+    assert 'addEventListener("focusout"' in GUIDE_JS
+    assert "event.relatedTarget" in GUIDE_JS       # child-to-child mouseout stays within target
+    assert ".contains(related)" in GUIDE_JS
     assert "fetch(" not in GUIDE_JS
 
 
