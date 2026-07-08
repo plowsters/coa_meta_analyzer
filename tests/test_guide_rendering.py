@@ -345,6 +345,24 @@ def test_spec_html_renders_grouped_stats_and_best_gear_targets():
     assert "Available to this class" in html
 
 
+def test_spec_hero_renders_weapon_armor_chip_when_gear_present():
+    site = _site()
+    spec = next(item for item in site.specs if item.spec_name == "Damage")
+
+    html = render_spec_html(site, spec)
+
+    assert 'class="chip weapon-chip"' in html
+
+
+def test_spec_hero_omits_weapon_chip_when_gear_empty():
+    site = _hybrid_site()
+    spec = site.specs[0]
+
+    html = render_spec_html(site, spec)
+
+    assert "weapon-chip" not in html
+
+
 def test_static_assets_have_fel_void_theme_and_no_network_fetch():
     assert "#6cf06b" in GUIDE_CSS          # fel lead
     assert "#a879ff" in GUIDE_CSS          # void lead

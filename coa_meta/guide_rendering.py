@@ -421,7 +421,7 @@ def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
         f"{_render_header(home_href='../index.html')}"
         f'<p><a href="../index.html">Back to guides</a></p><section class="hero" id="overview">'
         f"<h1>{_e(spec.class_name)} - {_e(spec.spec_name)}</h1><p>{_e(spec.summary)}</p>"
-        f'{_role_chips(spec, tooltip_id=f"role:{spec.slug}")}</section>'
+        f'{_role_chips(spec, tooltip_id=f"role:{spec.slug}")}{_weapon_armor_chip(spec)}</section>'
         f'<nav class="guide-nav">{nav}</nav>'
         f'<section class="panel" id="recommended-builds"><h2>Recommended Builds</h2>{builds}</section>'
         f"{_render_talent_tree_section(spec)}"
@@ -513,6 +513,33 @@ def _role_chips(spec: GuideSpec, *, tooltip_id: str = "") -> str:
             continue
         chips.append(f'<span class="chip" data-role-chip="{_e(role)}">Secondary: {_e(_label(role))}</span>')
     return " ".join(chips)
+
+
+def _attack_posture(spec: GuideSpec) -> str:
+    role = (spec.primary_role or spec.role or "").lower()
+    if role == "caster_dps":
+        return "Caster"
+    if role == "ranged_dps":
+        return "Ranged"
+    return "Melee"
+
+
+def _weapon_armor_chip(spec: GuideSpec) -> str:
+    build = spec.builds[0] if spec.builds else None
+    report = dict(build.gear_recommendation_report or {}) if build else {}
+    if not report:
+        return ""
+    weapons = tuple(report.get("best_weapon_types") or report.get("available_weapon_types") or ())
+    armor = tuple(report.get("best_armor_types") or report.get("available_armor_types") or ())
+    tokens = [_attack_posture(spec)]
+    if weapons:
+        tokens.append(" + ".join(dict.fromkeys(w.replace("_", " ").title() for w in weapons if w)))
+    if armor:
+        tokens.append(next(iter(dict.fromkeys(a.replace("_", " ").title() for a in armor if a))))
+    tokens = [token for token in tokens if token]
+    if len(tokens) <= 1:
+        return ""
+    return f'<span class="chip weapon-chip">{_e(" · ".join(tokens))}</span>'
 
 
 def _render_rotation_section(spec: GuideSpec) -> str:
