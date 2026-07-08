@@ -574,6 +574,7 @@ def test_spec_nav_is_sticky_and_tree_behavior_preserved():
     spec = next(item for item in site.specs if item.spec_name == "Damage")
     html = render_spec_html(site, spec)
     assert 'class="guide-nav"' in html
+    assert '<a href="#overview">' in html
     # tree data contracts intact
     assert 'data-tree-kind="ability_essence"' in html
     assert "data-tree-level-selector" in html
@@ -581,3 +582,6 @@ def test_spec_nav_is_sticky_and_tree_behavior_preserved():
     # css guarantees from prior milestones still hold
     assert ".tree-scroll { overflow-x: auto" in GUIDE_CSS
     assert ".guide-nav { " in GUIDE_CSS and "position: sticky" in GUIDE_CSS
+    assert ".guide-nav a {" in GUIDE_CSS
+    assert ".guide-nav a:hover" in GUIDE_CSS
+    assert ".guide-nav .chip" not in GUIDE_CSS

@@ -105,8 +105,8 @@ a { color: var(--lead); }
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .section-note { border: 1px solid rgba(245,197,66,.55); color: var(--warning); border-radius: 8px; padding: 10px; background: rgba(245,197,66,.08); }
 .guide-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; position: sticky; top: 0; z-index: 10; padding: 10px 12px; border: 1px solid rgba(var(--gold-rgb),.24); border-inline-color: rgba(var(--lead-rgb),.30); border-radius: 8px; background: linear-gradient(135deg, rgba(9,5,15,.94), rgba(var(--accent-rgb),.14)); backdrop-filter: blur(10px); box-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(var(--gold-rgb),.18); }
-.guide-nav .chip { border-color: rgba(var(--gold-rgb),.34); background: rgba(var(--lead-rgb),.075); color: var(--text); text-decoration: none; box-shadow: inset 0 0 14px rgba(var(--accent-rgb),.08); }
-.guide-nav .chip:hover { border-color: var(--lead); color: var(--lead-bright); box-shadow: 0 0 16px rgba(var(--lead-rgb),.18), inset 0 0 14px rgba(var(--accent-rgb),.08); }
+.guide-nav a { border-color: rgba(var(--gold-rgb),.34); background: rgba(var(--lead-rgb),.075); color: var(--text); text-decoration: none; box-shadow: inset 0 0 14px rgba(var(--accent-rgb),.08); }
+.guide-nav a:hover { border-color: var(--lead); color: var(--lead-bright); box-shadow: 0 0 16px rgba(var(--lead-rgb),.18), inset 0 0 14px rgba(var(--accent-rgb),.08); }
 .node-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .node-card { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; border: 1px solid rgba(var(--lead-rgb),.22); border-radius: 8px; padding: 10px; background: linear-gradient(135deg, rgba(var(--lead-rgb),.055), rgba(var(--accent-rgb),.06)); box-shadow: inset 0 1px 0 rgba(var(--gold-rgb),.11); }
 .icon-frame { width: 42px; height: 42px; border-radius: 6px; border: 1px solid var(--lead); display: grid; place-items: center; color: var(--lead); background: rgba(var(--lead-rgb),.09); box-shadow: inset 0 0 12px rgba(var(--lead-rgb),.12), 0 0 14px rgba(var(--lead-rgb),.11); }
