@@ -33,6 +33,14 @@ class ArchivePlan:
             "excluded": {k: [p.name for p in v] for k, v in self.excluded.items()},
         }
 
+    @property
+    def open_chain(self) -> tuple[Path, tuple[Path, ...]]:
+        # StormLib root archive plus every other base + patch archive attached on top, in load order.
+        if not self.base_archives:
+            raise ArchiveError(f"no base archive found under {self.client_root}")
+        root, *rest = self.base_archives
+        return root, (*rest, *self.patch_archives)
+
 
 def _patch_sort_key(name: str) -> tuple:
     stem = name.rsplit(".", 1)[0]
@@ -68,7 +76,12 @@ def discover_plan(client_root: Path) -> ArchivePlan:
             patches.append(p)  # base Ascension + CoA patches load together; attribution is M1.14B
     patches.sort(key=lambda p: _patch_sort_key(p.name))
 
-    area52 = tuple(sorted((client_root / "area-52").glob("*.MPQ"))) if (client_root / "area-52").is_dir() else ()
+    area52_dir = client_root / "area-52"
+    area52 = (
+        tuple(sorted(area52_dir.glob("*.MPQ")) + sorted(area52_dir.glob("*.mpq")))
+        if area52_dir.is_dir()
+        else ()
+    )
 
     return ArchivePlan(
         client_root=client_root,
@@ -81,7 +94,8 @@ def discover_plan(client_root: Path) -> ArchivePlan:
 def validate_ordering(
     plan: ArchivePlan, backend: ArchiveBackend, logical_path: str, expected_effective: Path
 ) -> None:
-    member = backend.read_effective_file(plan.base_archives[0], plan.patch_archives, logical_path)
+    root, attach = plan.open_chain
+    member = backend.read_effective_file(root, attach, logical_path)
     if member.effective_archive.name != expected_effective.name:
         raise ArchiveError(
             f"archive-plan ordering mismatch for {logical_path}: resolved "

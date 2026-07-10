@@ -61,3 +61,24 @@ def test_validate_ordering_detects_wrong_effective(tmp_path):
     validate_ordering(plan, backend, "DBFilesClient\\Spell.dbc", Path("patch-CA.MPQ"))
     with pytest.raises(ArchiveError):
         validate_ordering(plan, backend, "DBFilesClient\\Spell.dbc", Path("patch-C.MPQ"))
+
+
+def test_open_chain_attaches_all_base_and_patch_archives(tmp_path):
+    plan = discover_plan(_make_client(tmp_path))
+    root, attach = plan.open_chain
+    assert root.name == "common.MPQ"
+    attach_names = [p.name for p in attach]
+    # the three non-root base archives are attached, ahead of the patches
+    for name in ("common-2.MPQ", "expansion.MPQ", "lichking.MPQ"):
+        assert name in attach_names
+        assert attach_names.index(name) < attach_names.index("patch.MPQ")
+    assert "patch-WA.MPQ" not in attach_names  # Reborn stays excluded
+
+
+def test_open_chain_raises_without_base(tmp_path):
+    data = tmp_path / "Data"
+    data.mkdir()
+    (data / "patch-C.MPQ").write_bytes(b"MPQ\x1a")  # patches but no base archives
+    plan = discover_plan(data)
+    with pytest.raises(ArchiveError):
+        _ = plan.open_chain
