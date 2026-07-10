@@ -127,8 +127,9 @@ def test_index_places_hybrid_specs_in_secondary_role_sections():
     support_section = html.split('data-role-section="support"', 1)[1].split('data-role-section="caster_dps"', 1)[0]
     melee_section = html.split('data-role-section="melee_dps"', 1)[1]
 
-    assert "Guardian - Inspiration" in support_section
-    assert "Guardian - Inspiration" in melee_section
+    for section in (support_section, melee_section):
+        assert "Inspiration" in section
+        assert "Guardian" in section
     assert 'data-role-chip="melee_dps"' in html
     assert 'data-role-chip="support"' in html
 
@@ -511,7 +512,8 @@ def test_index_tagline_drops_player_facing():
     html = render_index_html(_site())
     assert "Player-facing" not in html
     assert "Class and specialization guides for Conquest of Azeroth." in html
-    assert "Meta Codex" in html
+    # Two-tone design hero: "Meta <span>Codex</span>"
+    assert '<h1 class="hero-title">Meta <span>Codex</span></h1>' in html
 
 
 def test_guide_css_defines_self_hosted_font_faces():
@@ -545,17 +547,15 @@ def test_index_shows_unique_spec_stat_line():
     assert f"{unique} specs · {role_count} roles" in html
 
 
-def test_index_flagship_badge_only_on_tyrant():
-    html = render_index_html(_hybrid_site())  # no tyrant -> no badge
-    assert "data-flagship" not in html
-
+def test_index_has_no_flagship_badge():
     site = _hybrid_site()
     tyrant = GuideSpec(**{**site.specs[0].__dict__, "slug": "felsworn-tyrant"})
     site = GuideSite(**{**site.__dict__, "specs": (tyrant,)})
 
     html = render_index_html(site)
 
-    assert "data-flagship" in html
+    assert "data-flagship" not in html
+    assert "Flagship" not in html
 
 
 def test_spec_card_reskin_marker_stays_off_spec_page_build_cards():

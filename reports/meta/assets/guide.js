@@ -38,7 +38,7 @@
     emberCanvas = document.createElement("canvas");
     emberCanvas.setAttribute("data-embers", "");
     emberCanvas.setAttribute("aria-hidden", "true");
-    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;";
+    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;";
     document.body.insertBefore(emberCanvas, document.body.firstChild);
     emberCtx = emberCanvas.getContext("2d");
     sizeEmberCanvas();
@@ -72,13 +72,26 @@
     const el = document.createElement("div");
     el.className = "tooltip" + (pinned ? " is-pinned" : "");
     el.innerHTML = tip.html || tip.text || "";
+    if (pinned) {
+      const hint = document.createElement("div");
+      hint.className = "pin-hint";
+      hint.textContent = "pinned · click again or press Esc to clear all";
+      el.appendChild(hint);
+    }
     document.body.appendChild(el);
     return el;
   }
   function placeTip(el, anchor) {
     const rect = anchor.getBoundingClientRect();
-    el.style.left = Math.min(rect.left, window.innerWidth - el.offsetWidth - 16) + "px";
-    el.style.top = Math.min(rect.bottom + 8, window.innerHeight - el.offsetHeight - 16) + "px";
+    const width = el.offsetWidth || 320;
+    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
+    el.style.left = left + "px";
+    const below = rect.bottom + 12;
+    if (below + el.offsetHeight < window.innerHeight - 16) {
+      el.style.top = below + "px"; el.style.bottom = "auto";
+    } else {
+      el.style.top = "auto"; el.style.bottom = (window.innerHeight - rect.top + 12) + "px";
+    }
   }
   function clearHover() {
     if (hoverEl) hoverEl.remove();
@@ -229,23 +242,58 @@
     document.querySelectorAll("[data-guide-tree-panel]").forEach(panel => {
       const buildSelector = panel.querySelector("[data-tree-build-selector]");
       const levelSelector = panel.querySelector("[data-tree-level-selector]");
+      const levelLabel = panel.querySelector("[data-tree-level-label]");
+      const levels = levelSelector ? parseJson(levelSelector.getAttribute("data-tree-levels"), []) : [];
+      function currentLevel() {
+        if (!levelSelector) return null;
+        if (levels.length) {
+          const index = Math.max(0, Math.min(parseInt(levelSelector.value, 10) || 0, levels.length - 1));
+          return levels[index];
+        }
+        return levelSelector.value;
+      }
       function currentBuildPanel() {
         const id = buildSelector ? buildSelector.value : panel.querySelector("[data-tree-build-panel]")?.getAttribute("data-tree-build-panel");
         return panel.querySelector(`[data-tree-build-panel="${id}"]`) || panel.querySelector("[data-tree-build-panel]");
       }
       function refresh() {
+        const level = currentLevel();
+        if (levelLabel && level != null) levelLabel.textContent = "Lv " + level;
+        panel.querySelectorAll("[data-level-tick]").forEach(tick => {
+          tick.classList.toggle("is-active", tick.getAttribute("data-level-tick") === String(level));
+        });
         const activePanel = currentBuildPanel();
         panel.querySelectorAll("[data-tree-build-panel]").forEach(buildPanel => { buildPanel.hidden = buildPanel !== activePanel; });
         if (!activePanel) return;
         activePanel.querySelectorAll("[data-tree-kind]").forEach(tree => {
-          applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+          applySnapshot(panel, tree, level != null ? level : tree.getAttribute("data-tree-level"));
         });
       }
       if (buildSelector) buildSelector.addEventListener("change", refresh);
-      if (levelSelector) levelSelector.addEventListener("change", refresh);
+      if (levelSelector) {
+        levelSelector.addEventListener("change", refresh);
+        levelSelector.addEventListener("input", refresh);
+      }
       refresh();
     });
   }
+  function initSectionNav() {
+    const links = Array.from(document.querySelectorAll(".guide-nav a[href^='#']"));
+    if (!links.length || typeof IntersectionObserver === "undefined") return;
+    const byId = new Map(links.map(link => [link.getAttribute("href").slice(1), link]));
+    const sections = Array.from(byId.keys()).map(id => document.getElementById(id)).filter(Boolean);
+    if (!sections.length) return;
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        links.forEach(link => link.classList.remove("is-active"));
+        const link = byId.get(entry.target.id);
+        if (link) link.classList.add("is-active");
+      });
+    }, { rootMargin: "-140px 0px -62% 0px", threshold: 0 });
+    sections.forEach(section => io.observe(section));
+  }
   window.addEventListener("resize", () => document.querySelectorAll("[data-tree-kind]").forEach(drawTreeLinks));
   document.addEventListener("DOMContentLoaded", initTrees);
+  document.addEventListener("DOMContentLoaded", initSectionNav);
 })();

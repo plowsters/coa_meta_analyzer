@@ -15,7 +15,7 @@ FRONT_PAGE_DISCLAIMER = (
     "and pending CoA compatibility with AscensionLogs."
 )
 GITHUB_MARK_SVG = (
-    '<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" fill="currentColor">'
+    '<svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true" fill="currentColor">'
     '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 '
     "0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01"
     "1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 "
@@ -24,6 +24,8 @@ GITHUB_MARK_SVG = (
     '3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>'
     "</svg>"
 )
+DIAMOND = '<span class="diamond" aria-hidden="true"></span>'
+HEAD_RULE = '<span class="head-rule" aria-hidden="true"></span>'
 
 GUIDE_CSS = """
 @font-face { font-family: "Cinzel"; font-weight: 600; font-display: swap; src: url("fonts/Cinzel-600.woff2") format("woff2"); }
@@ -37,6 +39,7 @@ GUIDE_CSS = """
 @font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap; src: url("fonts/JetBrainsMono-700.woff2") format("woff2"); }
 :root {
   --bg: #08060f;
+  --panel: rgba(17,11,28,.72);
   --panel-solid: rgba(14,10,23,.92);
   --panel-2: rgba(9,6,16,.85);
   --text: #f4f1fb;
@@ -44,13 +47,13 @@ GUIDE_CSS = """
   --dim: #8b81a6;
   --gold: #ffcf5c;
   --gold-rgb: 255,207,92;
+  --gold-text: #ffe6a6;
   --lead: #6cf06b;
   --lead-bright: #b7ff6a;
   --lead-rgb: 108,240,107;
   --accent: #9a6bff;
   --accent-rgb: 154,107,255;
   --line: rgba(108,240,107,.24);
-  --warning: #f5c542;
   --bevel: polygon(0 13px,13px 0,calc(100% - 13px) 0,100% 13px,100% calc(100% - 13px),calc(100% - 13px) 100%,13px 100%,0 calc(100% - 13px));
   --bevel-sm: polygon(0 7px,7px 0,calc(100% - 7px) 0,100% 7px,100% calc(100% - 7px),calc(100% - 7px) 100%,7px 100%,0 calc(100% - 7px));
 }
@@ -63,96 +66,260 @@ GUIDE_CSS = """
   --line: rgba(168,121,255,.30);
 }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: Barlow, system-ui, sans-serif; background: radial-gradient(circle at top, #24113b 0, var(--bg) 42rem); color: var(--text); }
+html { background: var(--bg); }
+body {
+  margin: 0; font-family: Barlow, system-ui, sans-serif; font-size: 16px; line-height: 1.55; color: var(--text);
+  background:
+    radial-gradient(1300px 640px at 50% -8%, rgba(var(--lead-rgb),.14), transparent 60%),
+    radial-gradient(1000px 560px at 90% 2%, rgba(var(--accent-rgb),.12), transparent 62%),
+    radial-gradient(900px 700px at 6% 34%, rgba(var(--accent-rgb),.08), transparent 60%),
+    var(--bg);
+}
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(circle at 50% 42%, transparent 58%, rgba(0,0,0,.55) 100%); mix-blend-mode: multiply; }
 h1, h2, h3, h4, h5, h6 { font-family: Cinzel, serif; }
-.mono, .chip, .tree-rank { font-family: "JetBrains Mono", monospace; }
-a { color: var(--lead); }
-.site-shell { max-width: 1280px; margin: 0 auto; padding: 28px; }
-.hero { padding: 28px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(var(--lead-rgb),.12), rgba(var(--accent-rgb),.13)); border-radius: 10px; box-shadow: 0 0 32px rgba(var(--lead-rgb),.08); }
-.front-disclaimer { margin-top: 16px; border: 1px solid rgba(245,197,66,.55); color: #ffe8a3; border-radius: 8px; padding: 12px 14px; background: rgba(245,197,66,.08); }
-.stat-line { margin: 14px 0 0; color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: .92rem; letter-spacing: .02em; }
-.role-filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-.role-filter { appearance: none; border: 1px solid rgba(var(--accent-rgb),.45); border-radius: 999px; background: rgba(28,16,44,.9); color: var(--text); padding: 8px 13px; font: inherit; cursor: pointer; box-shadow: inset 0 0 12px rgba(var(--accent-rgb),.1); }
-.role-filter:hover { border-color: var(--lead); box-shadow: 0 0 16px rgba(var(--lead-rgb),.18), inset 0 0 12px rgba(var(--accent-rgb),.1); }
-.role-filter.is-active, .role-filter[aria-pressed="true"] { border-color: var(--lead); color: #061109; background: linear-gradient(135deg, var(--lead), #b6ff5f); box-shadow: 0 0 18px rgba(var(--lead-rgb),.28); }
-.role-section { margin-top: 26px; }
-.role-section[hidden] { display: none; }
-.role-section-title { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--text); text-shadow: 0 0 14px rgba(var(--accent-rgb),.42); }
-.empty-role { color: var(--muted); margin: 0; }
-.guide-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 22px; }
-.guide-card, .panel { position: relative; border: 1px solid var(--line); background: linear-gradient(145deg, rgba(var(--lead-rgb),.055), rgba(var(--accent-rgb),.09) 48%, rgba(9,6,16,.94)); border-radius: 8px; padding: 18px; box-shadow: inset 0 1px 0 rgba(var(--gold-rgb),.18), 0 18px 36px rgba(0,0,0,.22); }
-.panel { margin-top: 18px; clip-path: var(--bevel); }
-.panel::before, .guide-card:not(.spec-card)::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; background: linear-gradient(135deg, rgba(var(--gold-rgb),.18), transparent 20%, transparent 78%, rgba(var(--lead-rgb),.13)); opacity: .75; }
-.panel > *, .guide-card > * { position: relative; }
-.guide-card:not(.spec-card) { clip-path: var(--bevel-sm); border-color: rgba(var(--gold-rgb),.32); }
-.guide-card:not(.spec-card) h3, .panel h2 { margin-top: 0; color: var(--text); text-shadow: 0 0 16px rgba(var(--lead-rgb),.22); }
-.panel h3 { color: var(--lead); text-shadow: 0 0 12px rgba(var(--lead-rgb),.18); }
-.spec-card { position: relative; padding: 32px 18px 18px; clip-path: var(--bevel-sm); background: linear-gradient(160deg, rgba(var(--lead-rgb),.07), rgba(var(--accent-rgb),.08)), rgba(19,11,30,.92); transition: box-shadow .15s ease, border-color .15s ease; }
-.spec-card:hover { border-color: var(--lead); box-shadow: 0 0 20px rgba(var(--lead-rgb),.18); }
-.flagship-badge { position: absolute; top: 10px; right: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border: 1px solid var(--gold); border-radius: 999px; background: rgba(var(--gold-rgb),.16); color: var(--gold); font-size: .78rem; font-family: "JetBrains Mono", monospace; box-shadow: 0 0 14px rgba(var(--gold-rgb),.28); }
-.spec-icon { display: inline-flex; width: 30px; height: 30px; vertical-align: middle; margin-right: 8px; border: 1px solid rgba(var(--lead-rgb),.4); clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); overflow: hidden; }
-.spec-icon img { width: 100%; height: 100%; object-fit: cover; }
-.spec-icon-mono { align-items: center; justify-content: center; background: rgba(var(--accent-rgb),.18); color: var(--text); font-size: 12px; }
-.site-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 4px; }
-.site-brand { font-weight: 600; color: var(--text); text-decoration: none; }
+.mono, .tree-rank { font-family: "JetBrains Mono", monospace; }
+a { color: var(--lead); text-decoration: none; }
+a:hover { color: var(--lead-bright); }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+::selection { background: rgba(var(--lead-rgb),.32); color: #fff; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
+::-webkit-scrollbar-thumb { background: rgba(var(--lead-rgb),.35); border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--lead-rgb),.6); border: 3px solid transparent; background-clip: padding-box; }
+@keyframes coaPulse { 0%,100% { box-shadow: 0 0 0 1px rgba(var(--lead-rgb),.55), 0 0 14px rgba(var(--lead-rgb),.45), inset 0 0 12px rgba(var(--lead-rgb),.22); } 50% { box-shadow: 0 0 0 1px rgba(var(--lead-rgb),.8), 0 0 26px rgba(var(--lead-rgb),.75), inset 0 0 16px rgba(var(--lead-rgb),.34); } }
+@keyframes coaFlow { to { stroke-dashoffset: -28; } }
+@keyframes coaDrift { 0%,100% { transform: translate3d(0,0,0) scale(1); opacity: .8; } 50% { transform: translate3d(2%,-3%,0) scale(1.08); opacity: 1; } }
+.site-shell { position: relative; z-index: 2; }
+.site-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px clamp(16px,4vw,40px); background: linear-gradient(180deg, rgba(8,6,15,.94), rgba(8,6,15,.72)); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.site-brand { display: inline-flex; align-items: center; gap: 11px; color: var(--text); }
+.site-brand:hover { color: var(--text); }
+.brand-sigil { width: 30px; height: 30px; display: grid; place-items: center; clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background: linear-gradient(135deg, var(--lead), var(--accent)); box-shadow: 0 0 16px rgba(var(--lead-rgb),.5); }
+.brand-sigil > span { width: 22px; height: 22px; display: grid; place-items: center; clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background: var(--bg); color: var(--lead); font-family: Cinzel, serif; font-weight: 900; font-size: 13px; }
+.brand-word { font-family: Cinzel, serif; font-weight: 700; letter-spacing: .14em; font-size: 14px; text-transform: uppercase; }
+.brand-word span { color: var(--lead); }
+.site-nav { display: flex; align-items: center; gap: 18px; }
+.all-guides { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; }
+.all-guides:hover { color: var(--lead); }
 .github-link { color: var(--muted); display: inline-flex; transition: color .15s ease; }
 .github-link:hover { color: var(--lead); }
-.site-footer { margin-top: 32px; padding: 18px 4px; border-top: 1px solid rgba(var(--accent-rgb),.25); color: var(--muted); font-size: 13px; }
-.site-footer a { color: var(--muted); }
-.site-footer a:hover { color: var(--lead); }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .85rem; }
-.warning { border-color: rgba(245,197,66,.55); color: var(--warning); }
-.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.section-note { border: 1px solid rgba(245,197,66,.55); color: var(--warning); border-radius: 8px; padding: 10px; background: rgba(245,197,66,.08); }
-.guide-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; position: sticky; top: 0; z-index: 10; padding: 10px 12px; border: 1px solid rgba(var(--gold-rgb),.24); border-inline-color: rgba(var(--lead-rgb),.30); border-radius: 8px; background: linear-gradient(135deg, rgba(9,5,15,.94), rgba(var(--accent-rgb),.14)); backdrop-filter: blur(10px); box-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(var(--gold-rgb),.18); }
-.guide-nav a { border-color: rgba(var(--gold-rgb),.34); background: rgba(var(--lead-rgb),.075); color: var(--text); text-decoration: none; box-shadow: inset 0 0 14px rgba(var(--accent-rgb),.08); }
-.guide-nav a:hover { border-color: var(--lead); color: var(--lead-bright); box-shadow: 0 0 16px rgba(var(--lead-rgb),.18), inset 0 0 14px rgba(var(--accent-rgb),.08); }
-.node-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.node-card { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; border: 1px solid rgba(var(--lead-rgb),.22); border-radius: 8px; padding: 10px; background: linear-gradient(135deg, rgba(var(--lead-rgb),.055), rgba(var(--accent-rgb),.06)); box-shadow: inset 0 1px 0 rgba(var(--gold-rgb),.11); }
-.icon-frame { width: 42px; height: 42px; border-radius: 6px; border: 1px solid var(--lead); display: grid; place-items: center; color: var(--lead); background: rgba(var(--lead-rgb),.09); box-shadow: inset 0 0 12px rgba(var(--lead-rgb),.12), 0 0 14px rgba(var(--lead-rgb),.11); }
-.icon-frame img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-.tree-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
-.tree-toolbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
-.tree-scroll { overflow-x: auto; padding-bottom: 8px; }
+.theme-toggle { display: inline-flex; align-items: center; gap: 0; padding: 3px; background: var(--panel-2); clip-path: var(--bevel-sm); border: 1px solid var(--line); }
+.theme-btn { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; font-size: 13px; font-weight: 700; letter-spacing: .04em; clip-path: var(--bevel-sm); color: var(--muted); background: transparent; transition: all .18s; }
+.theme-btn[aria-pressed="true"] { color: #0a0614; background: linear-gradient(135deg, var(--lead), var(--lead-bright)); box-shadow: 0 0 14px rgba(var(--lead-rgb),.4); }
+.theme-dot { width: 9px; height: 9px; display: inline-block; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.theme-dot-fel { background: #6cf06b; box-shadow: 0 0 8px #6cf06b; }
+.theme-dot-void { background: #a879ff; box-shadow: 0 0 8px #a879ff; }
+.hero { position: relative; overflow: hidden; max-width: 1320px; margin: 0 auto; padding: clamp(34px,6vw,72px) clamp(16px,4vw,40px) clamp(20px,3vw,30px); }
+.hero > * { position: relative; z-index: 1; }
+.hero-glow { position: absolute; top: -30px; left: 38%; width: min(560px,70%); height: 460px; z-index: 0; pointer-events: none; background: radial-gradient(circle at 50% 40%, rgba(var(--lead-rgb),.2), transparent 62%); filter: blur(8px); animation: coaDrift 12s ease-in-out infinite; }
+.hero-kicker { margin: 0 0 12px; font-family: "JetBrains Mono", monospace; font-size: 12.5px; letter-spacing: .34em; text-transform: uppercase; color: var(--lead); }
+.hero-title { margin: 0; font-weight: 900; font-size: clamp(40px,7vw,80px); line-height: .94; letter-spacing: .01em; text-shadow: 0 0 34px rgba(var(--lead-rgb),.4); }
+.hero-title span { color: var(--lead); }
+.hero-sub { margin: 16px 0 0; max-width: 60ch; font-size: 18px; color: var(--muted); }
+.front-disclaimer { margin: 18px 0 0; max-width: 80ch; padding: 12px 16px; background: rgba(var(--gold-rgb),.08); border: 1px solid rgba(var(--gold-rgb),.4); clip-path: var(--bevel-sm); color: var(--gold-text); font-size: 13.5px; }
+.stat-line { margin: 16px 0 0; font-family: "JetBrains Mono", monospace; font-size: 12.5px; letter-spacing: .02em; color: var(--dim); }
+.role-filter-bar { position: sticky; top: 56px; z-index: 35; background: linear-gradient(180deg, rgba(8,6,15,.96), rgba(8,6,15,.8)); backdrop-filter: blur(9px); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.role-filter-row { max-width: 1320px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px clamp(16px,4vw,40px); }
+.role-filter-label { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-right: 4px; }
+.role-filter { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; letter-spacing: .02em; clip-path: var(--bevel-sm); border: 1px solid var(--line); color: var(--muted); background: var(--panel-2); transition: all .16s; }
+.role-filter:hover { border-color: var(--lead); color: var(--text); }
+.role-filter.is-active, .role-filter[aria-pressed="true"] { border-color: var(--lead); color: #0a0614; background: linear-gradient(135deg, var(--lead), var(--lead-bright)); box-shadow: 0 0 14px rgba(var(--lead-rgb),.3); }
+.site-main { max-width: 1320px; margin: 0 auto; padding: clamp(22px,3vw,40px) clamp(16px,4vw,40px) 30px; display: grid; gap: clamp(30px,4vw,48px); grid-template-columns: minmax(0,1fr); }
+.role-section { scroll-margin-top: 128px; min-width: 0; }
+.role-section[hidden] { display: none; }
+.section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.section-head h2 { margin: 0; font-weight: 800; font-size: clamp(21px,2.8vw,29px); letter-spacing: .05em; color: var(--text); }
+.section-count { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--dim); }
+.diamond { flex: 0 0 auto; width: 11px; height: 11px; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: var(--lead); box-shadow: 0 0 10px var(--lead); }
+.head-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--lead), transparent); }
+.head-rule-dim { background: linear-gradient(90deg, var(--line), transparent); }
+.empty-role { color: var(--muted); margin: 0; }
+.guide-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(300px,100%),1fr)); }
+.guide-card { position: relative; clip-path: var(--bevel); background: linear-gradient(150deg, rgba(var(--lead-rgb),.4), rgba(var(--accent-rgb),.28)); padding: 1.5px; transition: transform .16s ease; }
+.guide-card[hidden] { display: none; }
+.frame-gold { background: linear-gradient(150deg, rgba(var(--gold-rgb),.45), rgba(var(--accent-rgb),.35)); }
+.card-inner { position: relative; display: flex; flex-direction: column; clip-path: var(--bevel); background: linear-gradient(165deg, var(--panel-solid), var(--panel-2)); padding: 18px 20px; height: 100%; color: var(--text); overflow: hidden; }
+a.card-inner:hover { color: var(--text); }
+.spec-card:hover { transform: translateY(-2px); }
+.spec-card-head { display: flex; align-items: center; gap: 13px; }
+.spec-icon, .spec-hero-icon { flex: 0 0 auto; display: grid; place-items: center; clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background: linear-gradient(150deg, var(--lead), var(--accent)); }
+.spec-icon { width: 52px; height: 58px; box-shadow: 0 0 16px rgba(var(--lead-rgb),.35); }
+.spec-icon-core { display: grid; place-items: center; clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background: var(--panel-2); overflow: hidden; }
+.spec-icon .spec-icon-core { width: 46px; height: 51px; }
+.spec-icon-core img { width: 100%; height: 100%; object-fit: cover; }
+.spec-icon-mono { color: var(--text); font-family: Cinzel, serif; font-weight: 700; font-size: 13px; }
+.spec-card-title { min-width: 0; }
+.spec-card-title h3 { margin: 0; font-weight: 700; font-size: 18px; color: var(--text); line-height: 1.15; }
+.spec-card-class { margin: 2px 0 0; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--lead); }
+.spec-card-summary { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); flex: 1; }
+.spec-card .chip-row { margin: 14px 0 0; }
+.spec-card-cta { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line); }
+.cta-label { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--lead); font-weight: 700; }
+.cta-arrow { color: var(--lead); font-size: 18px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); clip-path: var(--bevel-sm); background: var(--panel-2); color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: .02em; }
+.chip-primary { border-color: rgba(var(--lead-rgb),.5); color: var(--lead); background: rgba(var(--lead-rgb),.08); cursor: help; }
+.chip-dot { width: 8px; height: 8px; flex: 0 0 auto; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: var(--lead); }
+.chip.warning { border-color: rgba(var(--gold-rgb),.55); color: var(--gold-text); background: rgba(var(--gold-rgb),.09); }
+.weapon-chip { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+.spec-hero .hero-kicker { letter-spacing: .32em; margin-bottom: 14px; }
+.spec-hero-row { display: flex; flex-wrap: wrap; align-items: center; gap: clamp(18px,3vw,34px); }
+.spec-hero-icon { width: 112px; height: 124px; box-shadow: 0 0 40px rgba(var(--lead-rgb),.5); }
+.spec-hero-icon .spec-icon-core { width: 102px; height: 113px; }
+.spec-hero-icon img { opacity: .92; }
+.spec-hero-text { flex: 1 1 340px; min-width: 280px; }
+.spec-hero-text h1 { margin: 0; font-weight: 900; font-size: clamp(44px,7.5vw,86px); line-height: .92; letter-spacing: .01em; color: var(--text); text-shadow: 0 0 34px rgba(var(--lead-rgb),.42); }
+.spec-hero-class { margin: 6px 0 0; font-family: Cinzel, serif; font-weight: 600; font-size: clamp(17px,2.4vw,24px); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.spec-hero .chip-row { margin: 16px 0 0; gap: 10px; }
+.spec-hero .chip-primary { padding: 6px 14px 6px 12px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; border-color: var(--lead); background: rgba(var(--lead-rgb),.12); }
+.spec-hero .weapon-chip { padding: 6px 13px; }
+.spec-hero-summary { margin: 18px 0 0; max-width: 56ch; font-size: 17px; color: var(--muted); }
+.spec-hero-summary strong { color: var(--text); font-weight: 600; }
+.guide-nav { position: sticky; top: 56px; z-index: 35; margin-top: 8px; background: linear-gradient(180deg, rgba(8,6,15,.95), rgba(8,6,15,.78)); backdrop-filter: blur(9px); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.guide-nav-row { max-width: 1320px; margin: 0 auto; display: flex; gap: 2px; overflow-x: auto; padding: 0 clamp(10px,3vw,32px); }
+.guide-nav a { display: inline-block; white-space: nowrap; padding: 13px 15px; font-size: 13px; font-weight: 600; letter-spacing: .03em; color: var(--muted); border-bottom: 2px solid transparent; transition: color .15s; }
+.guide-nav a:hover { color: var(--lead-bright); }
+.guide-nav a.is-active { color: var(--lead); border-bottom-color: var(--lead); text-shadow: 0 0 12px rgba(var(--lead-rgb),.5); }
+.spec-main { max-width: 1320px; margin: 0 auto; padding: clamp(22px,4vw,44px) clamp(16px,4vw,40px); display: grid; gap: clamp(26px,4vw,48px); grid-template-columns: minmax(0,1fr); }
+.panel-section { scroll-margin-top: 132px; min-width: 0; }
+.frame { position: relative; clip-path: var(--bevel); background: linear-gradient(150deg, rgba(var(--lead-rgb),.4), rgba(var(--accent-rgb),.3)); padding: 1.5px; }
+.frame-inner { clip-path: var(--bevel); background: linear-gradient(160deg, var(--panel-solid), var(--panel-2)); padding: clamp(16px,2.4vw,26px); height: 100%; }
+.sub-panel { clip-path: var(--bevel-sm); border: 1px solid var(--line); background: var(--panel); padding: 18px 20px; }
+.section-note { padding: 11px 15px; background: rgba(var(--gold-rgb),.08); border: 1px solid rgba(var(--gold-rgb),.4); clip-path: var(--bevel-sm); color: var(--gold-text); font-size: 13.5px; }
+.stats-note { margin: -6px 0 18px; max-width: 74ch; }
+.builds-grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(min(300px,100%),1fr)); }
+.build-card .card-inner, .glance-card .card-inner { padding: 22px 24px; }
+.build-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.build-tier { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--gold); letter-spacing: .18em; }
+.build-head h3 { margin: 0; font-weight: 700; font-size: 23px; color: var(--text); }
+.build-reason { margin: 10px 0 16px; color: var(--muted); font-size: 15px; }
+.build-cta { margin: 4px 0 0; }
+.cta-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: linear-gradient(135deg, var(--lead), var(--lead-bright)); color: #07160a; font-weight: 700; letter-spacing: .04em; clip-path: var(--bevel-sm); text-transform: uppercase; font-size: 13px; }
+.cta-btn:hover { color: #07160a; }
+.glance-label { margin: 0 0 16px; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.glance-metric { display: flex; align-items: flex-end; gap: 12px; }
+.glance-value { font-family: Cinzel, serif; font-weight: 900; font-size: 54px; line-height: 1; color: var(--gold); text-shadow: 0 0 26px rgba(var(--gold-rgb),.45); cursor: help; }
+.glance-metric-label { padding-bottom: 8px; font-size: 13px; color: var(--muted); max-width: 15ch; }
+.essence-bars { display: grid; gap: 12px; margin-top: 20px; }
+.essence-bar-head { display: flex; justify-content: space-between; font-size: 12px; font-family: "JetBrains Mono", monospace; color: var(--muted); margin-bottom: 5px; }
+.essence-bar-head .ae-value { color: var(--lead); }
+.essence-bar-head .te-value { color: var(--accent); }
+.essence-track { height: 9px; background: var(--panel-2); border: 1px solid var(--line); clip-path: polygon(0 0,100% 0,calc(100% - 4px) 100%,0 100%); }
+.essence-fill { height: 100%; }
+.essence-fill.ae { background: linear-gradient(90deg, var(--lead), var(--lead-bright)); box-shadow: 0 0 10px rgba(var(--lead-rgb),.6); }
+.essence-fill.te { background: linear-gradient(90deg, var(--accent), var(--lead)); box-shadow: 0 0 10px rgba(var(--accent-rgb),.6); }
+.glance-facts { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; gap: 18px; flex-wrap: wrap; }
+.glance-fact-label { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+.glance-fact-value { color: var(--lead); font-weight: 700; text-transform: capitalize; }
+.glance-fact-value.band { color: var(--text); font-weight: 600; }
+.tree-toolbar { display: flex; flex-wrap: wrap; gap: 22px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.tree-toolbar label { display: inline-flex; align-items: center; gap: 8px; font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.tree-toolbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 7px 9px; font: inherit; font-size: 14px; letter-spacing: normal; text-transform: none; }
+.scrub-wrap { flex: 1 1 320px; min-width: 260px; }
+.scrub-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.scrub-title { font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.scrub-level { font-family: Cinzel, serif; font-weight: 800; font-size: 26px; color: var(--gold); text-shadow: 0 0 16px rgba(var(--gold-rgb),.5); }
+input[type="range"].level-scrub { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: transparent; cursor: pointer; }
+input[type="range"].level-scrub::-webkit-slider-runnable-track { height: 8px; background: linear-gradient(90deg, var(--lead), var(--accent)); clip-path: polygon(0 40%,100% 0,100% 100%,0 60%); }
+input[type="range"].level-scrub::-moz-range-track { height: 8px; background: linear-gradient(90deg, var(--lead), var(--accent)); }
+input[type="range"].level-scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -6px; background: var(--gold); box-shadow: 0 0 12px rgba(var(--gold-rgb),.8); clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+input[type="range"].level-scrub::-moz-range-thumb { width: 20px; height: 20px; border: none; background: var(--gold); clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.scrub-ticks { display: flex; justify-content: space-between; margin-top: 6px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--dim); }
+.scrub-ticks .is-active { color: var(--gold); font-weight: 700; }
+.tree-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0 4px; padding: 11px 15px; background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--bevel-sm); font-size: 12.5px; color: var(--muted); }
+.tree-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.legend-dot { width: 14px; height: 14px; border: 2px solid; border-radius: 50%; }
+.legend-selected { border-color: var(--lead); box-shadow: 0 0 8px rgba(var(--lead-rgb),.6); }
+.legend-free { border-color: var(--gold); }
+.legend-available { border-color: var(--accent); }
+.legend-locked { border-color: rgba(var(--accent-rgb),.3); opacity: .6; }
+.legend-hint { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--dim); }
+.tree-scroll { overflow-x: auto; padding: 4px 4px 8px; }
 .tree-build-panel[hidden] { display: none; }
-.tree-groups { display: grid; gap: 18px; min-width: max-content; }
+.tree-groups { display: grid; gap: 26px; margin-top: 18px; min-width: max-content; }
 .tree-group, .passive-lane { min-width: max-content; }
-.tree-group h3, .passive-lane h3 { margin: 0 0 8px; color: var(--lead); }
-.talent-tree { position: relative; display: grid; grid-template-columns: repeat(var(--tree-cols), 72px); grid-template-rows: repeat(var(--tree-rows), 72px); gap: 22px; min-width: max-content; padding: 18px; border: 1px solid rgba(var(--accent-rgb),.34); border-radius: 8px; background: radial-gradient(circle at center, rgba(var(--accent-rgb),.10), rgba(9,5,15,.48)), linear-gradient(135deg, rgba(var(--lead-rgb),.045), rgba(var(--gold-rgb),.035)); box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb),.08), inset 0 0 28px rgba(var(--accent-rgb),.10); }
+.tree-group-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.tree-group-head .diamond { width: 9px; height: 9px; box-shadow: 0 0 8px var(--lead); }
+.tree-group-head h3 { margin: 0; font-weight: 700; font-size: 18px; letter-spacing: .05em; color: var(--lead); }
+.talent-tree { position: relative; display: grid; grid-template-columns: repeat(var(--tree-cols), 58px); grid-template-rows: repeat(var(--tree-rows), 58px); gap: 34px; min-width: max-content; padding: 20px; border: 1px solid var(--line); clip-path: var(--bevel-sm); background: radial-gradient(circle at 50% 38%, rgba(var(--lead-rgb),.07), rgba(8,6,15,.5)); }
 .talent-tree.is-captured-layout { display: block; min-width: var(--tree-width); height: var(--tree-height); }
 .talent-tree[hidden] { display: none; }
-.passive-lane .talent-tree { display: flex; gap: 24px; align-items: center; min-height: 112px; }
+.passive-lane .talent-tree { display: flex; gap: 34px; align-items: center; min-height: 98px; }
 .passive-lane .talent-tree.is-captured-layout { display: block; }
 .tree-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.tree-links line { stroke: rgba(var(--accent-rgb),.45); stroke-width: 3; filter: drop-shadow(0 0 5px rgba(var(--accent-rgb),.35)); }
-.tree-links line.is-selected { stroke: var(--lead); filter: drop-shadow(0 0 7px rgba(var(--lead-rgb),.55)); }
-.tree-links line.is-available { stroke: var(--accent); }
-.tree-node { position: relative; z-index: 1; width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid rgba(var(--accent-rgb),.5); border-radius: 50%; color: var(--text); background: linear-gradient(145deg, rgba(var(--accent-rgb),.16), rgba(19,11,30,.96)); box-shadow: inset 0 0 16px rgba(var(--accent-rgb),.16), 0 0 0 2px rgba(5,3,10,.82), 0 0 16px rgba(var(--accent-rgb),.10); cursor: help; }
-.tree-node img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.tree-links line { stroke: rgba(var(--accent-rgb),.28); stroke-width: 2; }
+.tree-links line.is-selected { stroke: var(--lead); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 5 9; filter: drop-shadow(0 0 4px rgba(var(--lead-rgb),.7)); animation: coaFlow 1.1s linear infinite; }
+.tree-links line.is-available { stroke: var(--accent); stroke-width: 2.4; opacity: .8; stroke-dasharray: 4 6; }
+.tree-node { position: relative; z-index: 1; width: 58px; height: 58px; display: grid; place-items: center; padding: 0; border: 2px solid rgba(var(--accent-rgb),.28); border-radius: 50%; color: var(--text); background: rgba(10,7,18,.94); overflow: visible; transition: transform .16s ease, box-shadow .2s ease; cursor: help; }
+.tree-node img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; clip-path: inherit; }
 .is-captured-layout .tree-node { position: absolute; }
-.passive-lane .tree-node { border-radius: 12px; }
-.tree-node.shape-square { border-radius: 12px; }
-.tree-node.shape-hex { clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
-.tree-node.is-selected { border-color: var(--lead); box-shadow: 0 0 18px rgba(var(--lead-rgb),.42), inset 0 0 18px rgba(var(--lead-rgb),.16), 0 0 0 2px rgba(5,3,10,.82); }
-.tree-node.is-free { border-color: rgba(var(--lead-rgb),.6); color: var(--lead); }
-.tree-node.is-available { border-color: var(--accent); box-shadow: 0 0 14px rgba(var(--accent-rgb),.34), inset 0 0 16px rgba(var(--accent-rgb),.16); }
-.tree-node.is-gated, .tree-node.is-inactive { opacity: .54; filter: grayscale(.35); }
-.tree-node.is-over-budget { border-color: var(--warning); box-shadow: 0 0 16px rgba(245,197,66,.28); }
-.tree-rank { position: absolute; right: -7px; bottom: -7px; min-width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid rgba(var(--gold-rgb),.55); border-radius: 999px; background: #09050f; color: var(--gold); font-size: .72rem; box-shadow: 0 0 10px rgba(var(--gold-rgb),.20); }
-.leveling-path { margin-top: 14px; }
-.leveling-path summary { cursor: pointer; }
-.leveling-heading { display: inline-block; margin-right: 8px; font-size: 1.17em; font-weight: 700; }
-.leveling-list { columns: 220px auto; column-gap: 24px; padding: 8px 0 0 1.4rem; margin: 0; }
-.leveling-path li { margin-bottom: 6px; color: var(--muted); }
+.tree-node.shape-square, .passive-lane .tree-node { border-radius: 11px; }
+.tree-node.shape-hex { clip-path: polygon(25% 4%,75% 4%,100% 50%,75% 96%,25% 96%,0 50%); border-radius: 0; }
+.tree-node.is-selected { border-color: var(--lead); box-shadow: 0 0 0 1px rgba(var(--lead-rgb),.55), 0 0 15px rgba(var(--lead-rgb),.5), inset 0 0 12px rgba(var(--lead-rgb),.24); animation: coaPulse 2.6s ease-in-out infinite; }
+.tree-node.is-free { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(var(--gold-rgb),.5), 0 0 14px rgba(var(--gold-rgb),.45); }
+.tree-node.is-available { border-color: var(--accent); box-shadow: 0 0 12px rgba(var(--accent-rgb),.4); }
+.tree-node.is-gated, .tree-node.is-inactive { opacity: .46; filter: grayscale(.55); }
+.tree-node.is-gated img, .tree-node.is-inactive img { opacity: .7; }
+.tree-node.is-over-budget { border-color: var(--gold); box-shadow: 0 0 16px rgba(var(--gold-rgb),.28); }
+.tree-rank { position: absolute; right: -6px; bottom: -6px; min-width: 18px; height: 18px; padding: 0 3px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; z-index: 2; }
+.leveling-path { margin-top: 22px; border: 1px solid var(--line); clip-path: var(--bevel-sm); background: var(--panel-2); }
+.leveling-path summary { padding: 14px 18px; cursor: pointer; }
+.leveling-heading { display: inline-block; margin-right: 8px; font-family: Cinzel, serif; font-weight: 600; font-size: 15px; letter-spacing: .04em; color: var(--text); }
+.leveling-path summary .mono { font-size: 11px; color: var(--dim); }
+.leveling-list { columns: 240px auto; column-gap: 24px; padding: 4px 20px 20px 44px; margin: 0; }
+.leveling-path li { margin-bottom: 8px; color: var(--muted); font-size: 13.5px; }
 .leveling-list li { break-inside: avoid; }
-.tooltip { position: fixed; z-index: 20; max-width: 360px; padding: 12px; border: 1px solid var(--accent); border-radius: 8px; background: #09050f; box-shadow: 0 0 28px rgba(var(--accent-rgb),.25); }
-.tooltip.is-pinned { border-color: var(--gold); box-shadow: 0 0 24px rgba(var(--gold-rgb),.32); }
+.leveling-list strong { font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); }
+.leveling-list .chip { padding: 2px 8px; border: none; background: none; font-family: "JetBrains Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+.leveling-path > ul { margin: 0; padding: 0 20px 16px 38px; color: var(--gold-text); font-size: 13px; }
+.rotation-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(320px,100%),1fr)); }
+.rotation-card { background: linear-gradient(150deg, rgba(var(--lead-rgb),.32), rgba(var(--accent-rgb),.24)); }
+.rotation-card .card-inner { padding: 20px 22px; }
+.rotation-card h3 { margin: 0 0 14px; font-weight: 700; font-size: 17px; letter-spacing: .04em; color: var(--lead); display: flex; align-items: center; gap: 9px; }
+.rotation-card h3 .diamond { width: 8px; height: 8px; box-shadow: none; }
+.step-list { margin: 0; padding: 0; list-style-type: none; display: grid; gap: 10px; }
+.step-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; color: var(--muted); }
+.step-num { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 700; color: var(--lead); border: 1px solid rgba(var(--lead-rgb),.45); clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.step-text { padding-top: 2px; min-width: 0; }
+.step-text .muted { color: var(--dim); }
+.rotation-extras { margin-top: 20px; }
+.stat-groups, .gear-groups { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(260px,100%),1fr)); }
+.stat-group h3 { margin: 0 0 14px; font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.stat-chips { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+.stat-chip { display: inline-flex; align-items: center; gap: 10px; padding: 9px 13px; background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--bevel-sm); font-size: 14px; font-weight: 600; color: var(--text); cursor: help; }
+.stat-rank { flex: 0 0 auto; width: 20px; height: 20px; display: grid; place-items: center; font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700; color: var(--gold); border: 1px solid rgba(var(--gold-rgb),.4); border-radius: 50%; }
+.gear-group h3 { margin: 0 0 13px; font-weight: 700; font-size: 16px; color: var(--lead); }
+.gear-group .chip { color: var(--text); font-size: 13px; font-weight: 400; padding: 6px 13px; }
+.gear-note { margin: 14px 0 0; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--dim); }
+.ability-note { margin: 0 0 16px; font-size: 13.5px; color: var(--dim); }
+.node-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(240px,100%),1fr)); }
+.node-card { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--line); clip-path: var(--bevel-sm); color: var(--text); }
+a.node-card:hover { border-color: rgba(var(--lead-rgb),.5); color: var(--text); }
+.icon-frame { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; clip-path: var(--bevel-sm); border: 1px solid rgba(var(--lead-rgb),.4); overflow: hidden; background: var(--panel-2); color: var(--lead); font-size: 12px; }
+.icon-frame img { width: 100%; height: 100%; object-fit: cover; }
+.node-text { min-width: 0; }
+.node-name { display: block; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-meta { display: block; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+.warnings-panel { clip-path: var(--bevel-sm); border: 1px solid rgba(var(--gold-rgb),.5); background: rgba(var(--gold-rgb),.07); padding: 18px 22px; color: var(--gold-text); }
+.warnings-panel h2 { margin: 0 0 10px; font-size: 17px; color: var(--gold-text); }
+.warnings-panel ul { margin: 0; padding-left: 1.2rem; font-size: 13.5px; }
+.data-notes-panel { clip-path: var(--bevel-sm); border: 1px solid var(--line); background: var(--panel); padding: 18px 22px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
+.data-notes-panel h2 { margin: 0 0 4px; font-weight: 700; font-size: 17px; color: var(--text); }
+.data-notes-panel p { margin: 0; font-size: 13px; color: var(--muted); max-width: 70ch; }
+.generated-stamp { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--dim); white-space: nowrap; }
+.tooltip { position: fixed; z-index: 70; width: 320px; max-width: 92vw; padding: 13px 15px; background: linear-gradient(160deg, rgba(12,8,20,.98), rgba(9,6,15,.98)); border: 1px solid var(--accent); clip-path: var(--bevel-sm); box-shadow: 0 0 30px rgba(var(--accent-rgb),.35), 0 14px 40px rgba(0,0,0,.6); font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.tooltip.is-pinned { border-color: var(--gold); box-shadow: 0 0 24px rgba(var(--gold-rgb),.32), 0 14px 40px rgba(0,0,0,.6); }
+.tooltip strong { font-family: Cinzel, serif; font-weight: 700; font-size: 15px; color: var(--gold); line-height: 1.2; }
 .tooltip table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-.tooltip th, .tooltip td { border: 1px solid rgba(var(--accent-rgb),.3); padding: 4px 6px; text-align: left; vertical-align: top; }
-.theme-toggle { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; background: var(--panel-2); }
-.theme-btn { appearance: none; border: none; border-radius: 999px; background: transparent; color: var(--muted); padding: 5px 12px; font: inherit; font-size: .82rem; cursor: pointer; transition: background .15s ease, color .15s ease; }
-.theme-btn[aria-pressed="true"] { background: var(--lead); color: #061109; }
-@media (max-width: 720px) { .site-shell { padding: 16px; } .hero { padding: 20px; } }
+.tooltip th, .tooltip td { border: 1px solid rgba(var(--accent-rgb),.3); padding: 4px 6px; text-align: left; vertical-align: top; font-size: 12px; }
+.tooltip .pin-hint { margin-top: 9px; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--dim); }
+.site-footer { border-top: 1px solid var(--line); background: rgba(8,6,15,.7); padding: 26px clamp(16px,4vw,40px); margin-top: 20px; }
+.footer-row { max-width: 1320px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--dim); }
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--lead); }
+.footer-links { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+@media (max-width: 720px) { .spec-hero-icon { width: 84px; height: 93px; } .spec-hero-icon .spec-icon-core { width: 76px; height: 84px; } .legend-hint { margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
 """
 
 GUIDE_JS = """
@@ -196,7 +363,7 @@ GUIDE_JS = """
     emberCanvas = document.createElement("canvas");
     emberCanvas.setAttribute("data-embers", "");
     emberCanvas.setAttribute("aria-hidden", "true");
-    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;";
+    emberCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;";
     document.body.insertBefore(emberCanvas, document.body.firstChild);
     emberCtx = emberCanvas.getContext("2d");
     sizeEmberCanvas();
@@ -230,13 +397,26 @@ GUIDE_JS = """
     const el = document.createElement("div");
     el.className = "tooltip" + (pinned ? " is-pinned" : "");
     el.innerHTML = tip.html || tip.text || "";
+    if (pinned) {
+      const hint = document.createElement("div");
+      hint.className = "pin-hint";
+      hint.textContent = "pinned · click again or press Esc to clear all";
+      el.appendChild(hint);
+    }
     document.body.appendChild(el);
     return el;
   }
   function placeTip(el, anchor) {
     const rect = anchor.getBoundingClientRect();
-    el.style.left = Math.min(rect.left, window.innerWidth - el.offsetWidth - 16) + "px";
-    el.style.top = Math.min(rect.bottom + 8, window.innerHeight - el.offsetHeight - 16) + "px";
+    const width = el.offsetWidth || 320;
+    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
+    el.style.left = left + "px";
+    const below = rect.bottom + 12;
+    if (below + el.offsetHeight < window.innerHeight - 16) {
+      el.style.top = below + "px"; el.style.bottom = "auto";
+    } else {
+      el.style.top = "auto"; el.style.bottom = (window.innerHeight - rect.top + 12) + "px";
+    }
   }
   function clearHover() {
     if (hoverEl) hoverEl.remove();
@@ -387,55 +567,103 @@ GUIDE_JS = """
     document.querySelectorAll("[data-guide-tree-panel]").forEach(panel => {
       const buildSelector = panel.querySelector("[data-tree-build-selector]");
       const levelSelector = panel.querySelector("[data-tree-level-selector]");
+      const levelLabel = panel.querySelector("[data-tree-level-label]");
+      const levels = levelSelector ? parseJson(levelSelector.getAttribute("data-tree-levels"), []) : [];
+      function currentLevel() {
+        if (!levelSelector) return null;
+        if (levels.length) {
+          const index = Math.max(0, Math.min(parseInt(levelSelector.value, 10) || 0, levels.length - 1));
+          return levels[index];
+        }
+        return levelSelector.value;
+      }
       function currentBuildPanel() {
         const id = buildSelector ? buildSelector.value : panel.querySelector("[data-tree-build-panel]")?.getAttribute("data-tree-build-panel");
         return panel.querySelector(`[data-tree-build-panel="${id}"]`) || panel.querySelector("[data-tree-build-panel]");
       }
       function refresh() {
+        const level = currentLevel();
+        if (levelLabel && level != null) levelLabel.textContent = "Lv " + level;
+        panel.querySelectorAll("[data-level-tick]").forEach(tick => {
+          tick.classList.toggle("is-active", tick.getAttribute("data-level-tick") === String(level));
+        });
         const activePanel = currentBuildPanel();
         panel.querySelectorAll("[data-tree-build-panel]").forEach(buildPanel => { buildPanel.hidden = buildPanel !== activePanel; });
         if (!activePanel) return;
         activePanel.querySelectorAll("[data-tree-kind]").forEach(tree => {
-          applySnapshot(panel, tree, levelSelector ? levelSelector.value : tree.getAttribute("data-tree-level"));
+          applySnapshot(panel, tree, level != null ? level : tree.getAttribute("data-tree-level"));
         });
       }
       if (buildSelector) buildSelector.addEventListener("change", refresh);
-      if (levelSelector) levelSelector.addEventListener("change", refresh);
+      if (levelSelector) {
+        levelSelector.addEventListener("change", refresh);
+        levelSelector.addEventListener("input", refresh);
+      }
       refresh();
     });
   }
+  function initSectionNav() {
+    const links = Array.from(document.querySelectorAll(".guide-nav a[href^='#']"));
+    if (!links.length || typeof IntersectionObserver === "undefined") return;
+    const byId = new Map(links.map(link => [link.getAttribute("href").slice(1), link]));
+    const sections = Array.from(byId.keys()).map(id => document.getElementById(id)).filter(Boolean);
+    if (!sections.length) return;
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        links.forEach(link => link.classList.remove("is-active"));
+        const link = byId.get(entry.target.id);
+        if (link) link.classList.add("is-active");
+      });
+    }, { rootMargin: "-140px 0px -62% 0px", threshold: 0 });
+    sections.forEach(section => io.observe(section));
+  }
   window.addEventListener("resize", () => document.querySelectorAll("[data-tree-kind]").forEach(drawTreeLinks));
   document.addEventListener("DOMContentLoaded", initTrees);
+  document.addEventListener("DOMContentLoaded", initSectionNav);
 })();
 """
 
 
-def _render_header(home_href: str = "index.html") -> str:
+def _render_header(home_href: str = "index.html", *, show_all_guides: bool = False) -> str:
+    all_guides = (
+        f'<a class="all-guides" href="{_e(home_href)}">All Guides</a>' if show_all_guides else ""
+    )
     return (
         '<header class="site-header">'
-        f'<a class="site-brand" href="{_e(home_href)}">CoA Codex</a>'
+        f'<a class="site-brand" href="{_e(home_href)}">'
+        '<span class="brand-sigil" aria-hidden="true"><span>C</span></span>'
+        '<span class="brand-word">CoA <span>Codex</span></span></a>'
         '<div class="theme-toggle" role="group" aria-label="Theme" data-theme-toggle>'
-        '<button type="button" class="theme-btn" data-theme-btn data-theme-value="fel" aria-pressed="true">Fel</button>'
-        '<button type="button" class="theme-btn" data-theme-btn data-theme-value="void" aria-pressed="false">Void</button>'
+        '<button type="button" class="theme-btn" data-theme-btn data-theme-value="fel" aria-pressed="true">'
+        '<span class="theme-dot theme-dot-fel" aria-hidden="true"></span>Fel</button>'
+        '<button type="button" class="theme-btn" data-theme-btn data-theme-value="void" aria-pressed="false">'
+        '<span class="theme-dot theme-dot-void" aria-hidden="true"></span>Void</button>'
         "</div>"
+        f'<nav class="site-nav">{all_guides}'
         f'<a class="github-link" href="{REPO_URL}" target="_blank" rel="noopener" '
-        f'aria-label="View source on GitHub">{GITHUB_MARK_SVG}</a>'
+        f'aria-label="View source on GitHub">{GITHUB_MARK_SVG}</a></nav>'
         "</header>"
     )
 
 
 def _render_footer(site: GuideSite) -> str:
     generated = _e(getattr(site, "generated_at", "") or "")
-    generated_html = f" · Generated {generated}" if generated else ""
+    generated_html = f'<span class="generated-stamp">Generated {generated}</span>' if generated else ""
     return (
-        '<footer class="site-footer">'
-        "<p>© 2026 CoA Codex · Fan-made theorycraft tool. "
-        "Not affiliated with or endorsed by Project Ascension.</p>"
-        f'<p><a href="{ISSUES_URL}" target="_blank" rel="noopener">Submit an issue</a> · '
+        '<footer class="site-footer"><div class="footer-row">'
+        "<span>© 2026 CoA Codex · Fan-made theorycraft tool. "
+        "Not affiliated with or endorsed by Project Ascension.</span>"
+        '<span class="footer-links">'
+        f'<a href="{ISSUES_URL}" target="_blank" rel="noopener">Submit an issue</a>'
         f'<a href="{REPO_URL}" target="_blank" rel="noopener">Source on GitHub</a>'
-        f"{generated_html}</p>"
-        "</footer>"
+        f"{generated_html}</span>"
+        "</div></footer>"
     )
+
+
+def _section_head(title: str, extra: str = "") -> str:
+    return f'<div class="section-head"><h2>{_e(title)}</h2>{extra}{HEAD_RULE}</div>'
 
 
 def render_index_html(site: GuideSite) -> str:
@@ -447,13 +675,17 @@ def render_index_html(site: GuideSite) -> str:
         f'{unique_specs} spec{"" if unique_specs == 1 else "s"} · '
         f'{role_count} role{"" if role_count == 1 else "s"}</p>'
     )
-    filters = '<div class="role-filter-bar" aria-label="Filter guides by role">'
-    filters += '<button class="role-filter is-active" data-role-filter="all" aria-pressed="true">All Roles</button>'
+    filters = (
+        '<div class="role-filter-bar" id="guides">'
+        '<div class="role-filter-row" role="group" aria-label="Filter guides by role">'
+        '<span class="role-filter-label">Filter</span>'
+        '<button class="role-filter is-active" data-role-filter="all" aria-pressed="true">All Roles</button>'
+    )
     filters += "".join(
         f'<button class="role-filter" data-role-filter="{_e(role)}" aria-pressed="false">{_e(_label(role))}</button>'
         for role in roles
     )
-    filters += "</div>"
+    filters += "</div></div>"
     role_sections = "".join(_render_role_section(role, [spec for spec in site.specs if role in _spec_roles(spec)]) for role in roles)
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
@@ -461,12 +693,14 @@ def render_index_html(site: GuideSite) -> str:
         "<title>CoA Codex</title><link rel=\"stylesheet\" href=\"assets/guide.css\">"
         "</head><body><main class=\"site-shell\">"
         f"{_render_header()}"
-        "<section class=\"hero\"><h1>Meta Codex</h1>"
-        "<p>Class and specialization guides for Conquest of Azeroth.</p>"
+        '<section class="hero"><div class="hero-glow" aria-hidden="true"></div>'
+        '<p class="hero-kicker">Conquest of Azeroth</p>'
+        '<h1 class="hero-title">Meta <span>Codex</span></h1>'
+        '<p class="hero-sub">Class and specialization guides for Conquest of Azeroth.</p>'
         f'<p class="front-disclaimer">{_e(FRONT_PAGE_DISCLAIMER)}</p>'
         f"{stat_line}</section>"
-        f"<section class=\"panel\"><h2>Find Your Guide</h2>{filters}</section>"
-        f"{role_sections}"
+        f"{filters}"
+        f'<div class="site-main">{role_sections}</div>'
         f"{_render_footer(site)}"
         f"{_tooltip_script(site)}<script src=\"assets/guide.js\"></script>"
         "</main></body></html>"
@@ -474,62 +708,102 @@ def render_index_html(site: GuideSite) -> str:
 
 
 def render_spec_html(site: GuideSite, spec: GuideSpec) -> str:
-    nav = "".join(f'<a href="#{_anchor(section)}">{_e(section)}</a>' for section in spec.sections)
+    nav_links = "".join(f'<a href="#{_anchor(section)}">{_e(section)}</a>' for section in spec.sections)
+    nav = f'<nav class="guide-nav" aria-label="Guide sections"><div class="guide-nav-row">{nav_links}</div></nav>'
     warnings = ""
     if spec.warnings:
         items = "".join(f"<li>{_e(warning)}</li>" for warning in spec.warnings)
-        warnings = f'<section class="panel warning" id="warnings"><h2>Warnings</h2><ul>{items}</ul></section>'
+        warnings = (
+            '<section class="panel-section" id="warnings">'
+            f'<div class="warnings-panel"><h2>Warnings</h2><ul>{items}</ul></div></section>'
+        )
     nodes = "".join(_render_node(node) for node in spec.nodes)
-    builds = "".join(_render_build(build) for build in spec.builds)
+    node_count = len(spec.nodes)
+    hero = (
+        '<section class="hero spec-hero" id="overview">'
+        '<div class="hero-glow" aria-hidden="true"></div>'
+        f'<p class="hero-kicker">Conquest of Azeroth · {_e(spec.class_name)}</p>'
+        '<div class="spec-hero-row">'
+        f"{_render_spec_icon(spec, '../assets', css_class='spec-hero-icon')}"
+        '<div class="spec-hero-text">'
+        f"<h1>{_e(spec.spec_name)}</h1>"
+        f'<p class="spec-hero-class">{_e(spec.class_name)}</p>'
+        f'<div class="chip-row">{_role_chips(spec, tooltip_id=f"role:{spec.slug}")} {_weapon_armor_chip(spec)}</div>'
+        f'<p class="spec-hero-summary">{_e(spec.summary)}</p>'
+        "</div></div></section>"
+    )
+    abilities_section = (
+        '<section class="panel-section" id="abilities-and-talents">'
+        + _section_head(
+            "Abilities and Talents",
+            f'<span class="section-count">{node_count} entr{"y" if node_count == 1 else "ies"}</span>',
+        )
+        + '<p class="ability-note">Hover or focus any entry for its full in-game tooltip.</p>'
+        + f'<div class="node-list">{nodes}</div></section>'
+    )
+    data_notes = (
+        '<section class="panel-section" id="data-notes">'
+        '<div class="data-notes-panel"><div>'
+        "<h2>Data Notes</h2>"
+        "<p>Theorycraft projections from CoA Builder and Ascension data — not observed logs "
+        "or simulated output. Accuracy tuning via combat logs / simming pending.</p></div>"
+        f'<span class="generated-stamp">Generated {_e(site.generated_at)}</span>'
+        "</div></section>"
+    )
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         f"<title>{_e(spec.class_name)} {_e(spec.spec_name)} Guide · CoA Codex</title>"
         "<link rel=\"stylesheet\" href=\"../assets/guide.css\"></head><body><main class=\"site-shell\">"
-        f"{_render_header(home_href='../index.html')}"
-        f'<p><a href="../index.html">Back to guides</a></p><section class="hero" id="overview">'
-        f"<h1>{_e(spec.class_name)} - {_e(spec.spec_name)}</h1><p>{_e(spec.summary)}</p>"
-        f'{_role_chips(spec, tooltip_id=f"role:{spec.slug}")}{_weapon_armor_chip(spec)}</section>'
-        f'<nav class="guide-nav">{nav}</nav>'
-        f'<section class="panel" id="recommended-builds"><h2>Recommended Builds</h2>{builds}</section>'
+        f"{_render_header(home_href='../index.html', show_all_guides=True)}"
+        f"{hero}"
+        f"{nav}"
+        '<div class="spec-main">'
+        f"{_render_builds_section(spec)}"
         f"{_render_talent_tree_section(spec)}"
         f"{_render_rotation_section(spec)}"
         f"{_render_stats_section(spec)}"
         f"{_render_gear_section(spec)}"
-        f'<section class="panel" id="abilities-and-talents"><h2>Abilities and Talents</h2><div class="node-list">{nodes}</div></section>'
-        f"{warnings}<section class=\"panel\" id=\"data-notes\"><h2>Data Notes</h2><p>Generated: {_e(site.generated_at)}</p></section>"
+        f"{abilities_section}"
+        f"{warnings}{data_notes}"
+        "</div>"
         f"{_render_footer(site)}"
         f"{_tooltip_script(site)}<script src=\"../assets/guide.js\"></script>"
         "</main></body></html>"
     )
 
 
-def _render_spec_icon(spec: GuideSpec, asset_prefix: str = "assets") -> str:
+def _render_spec_icon(spec: GuideSpec, asset_prefix: str = "assets", *, css_class: str = "spec-icon") -> str:
     asset = getattr(spec, "icon_asset", None)
     if asset and asset.href and not asset.missing:
         src = _asset_src(asset.href, asset_prefix)
-        return f'<span class="spec-icon"><img src="{_e(src)}" alt="" loading="lazy"></span>'
-    initials = "".join(word[:1] for word in spec.class_name.split()[:2]).upper() or spec.class_name[:2].upper()
-    return f'<span class="spec-icon spec-icon-mono">{_e(initials)}</span>'
+        core = f'<span class="spec-icon-core"><img src="{_e(src)}" alt="" loading="lazy"></span>'
+    else:
+        initials = "".join(word[:1] for word in spec.class_name.split()[:2]).upper() or spec.class_name[:2].upper()
+        core = f'<span class="spec-icon-core spec-icon-mono">{_e(initials)}</span>'
+    return f'<span class="{css_class}" aria-hidden="true">{core}</span>'
 
 
 def _render_spec_card(spec: GuideSpec) -> str:
-    warning = '<span class="chip warning">Warnings</span>' if spec.warning_count else ""
-    flagship = (
-        '<span class="flagship-badge" data-flagship>✦ Flagship</span>'
-        if spec.slug == "felsworn-tyrant"
-        else ""
-    )
+    warning = '<span class="chip warning">⚠ Warnings</span>' if spec.warning_count else ""
     role_values = " ".join(_spec_roles(spec))
     return (
-        f'<article class="guide-card spec-card" data-role="{_e(role_values)}">{flagship}'
-        f"<h2>{_render_spec_icon(spec)} {_e(spec.class_name)} - {_e(spec.spec_name)}</h2>"
-        f"<p>{_e(spec.summary)}</p><p>{_role_chips(spec)} {warning}</p>"
-        f'<p><a href="{_e(spec.href)}">Open guide</a></p></article>'
+        f'<article class="guide-card spec-card" data-role="{_e(role_values)}">'
+        f'<a class="card-inner spec-card-inner" href="{_e(spec.href)}">'
+        '<div class="spec-card-head">'
+        f"{_render_spec_icon(spec)}"
+        f'<div class="spec-card-title"><h3>{_e(spec.spec_name)}</h3>'
+        f'<p class="spec-card-class">{_e(spec.class_name)}</p></div></div>'
+        f'<p class="spec-card-summary">{_e(spec.summary)}</p>'
+        f'<div class="chip-row">{_role_chips(spec)} {warning}</div>'
+        '<div class="spec-card-cta"><span class="cta-label">Open guide</span>'
+        '<span class="cta-arrow" aria-hidden="true">→</span></div>'
+        "</a></article>"
     )
 
 
 def _render_role_section(role: str, specs: list[GuideSpec]) -> str:
+    count = len(specs)
     if specs:
         cards = "".join(_render_spec_card(spec) for spec in sorted(specs, key=lambda item: (item.class_name, item.spec_name)))
         body = f'<div class="guide-grid">{cards}</div>'
@@ -537,7 +811,11 @@ def _render_role_section(role: str, specs: list[GuideSpec]) -> str:
         body = f'<p class="empty-role">No {_e(_label(role))} guides are available in the current report.</p>'
     return (
         f'<section class="role-section" data-role-section="{_e(role)}">'
-        f'<h2 class="role-section-title">{_e(_label(role))}</h2>{body}</section>'
+        '<div class="section-head">'
+        f"{DIAMOND}"
+        f'<h2 class="role-section-title">{_e(_label(role))}</h2>'
+        f'<span class="section-count">{count} spec{"" if count == 1 else "s"}</span>'
+        f"{HEAD_RULE}</div>{body}</section>"
     )
 
 
@@ -547,19 +825,77 @@ def _ordered_roles(site: GuideSite) -> tuple[str, ...]:
     return ROLE_DISPLAY_ORDER + tuple(extras)
 
 
+def _render_builds_section(spec: GuideSpec) -> str:
+    builds = "".join(_render_build(build) for build in spec.builds)
+    glance = _render_glance_panel(spec)
+    if not builds and not glance:
+        body = "<p>No recommended builds are available in the current report.</p>"
+    else:
+        body = f'<div class="builds-grid">{builds}{glance}</div>'
+    return (
+        '<section class="panel-section" id="recommended-builds">'
+        + _section_head("Recommended Builds")
+        + body
+        + "</section>"
+    )
+
+
 def _render_build(build: Any) -> str:
-    warning = '<span class="chip warning">Warnings</span>' if build.warnings else ""
+    warning = '<span class="chip warning">⚠ Warnings</span>' if build.warnings else ""
     primary_index = build.primary_index if build.primary_index is not None else build.projected_dps_index
     primary_index_label = build.primary_index_label or "Projected Damage Index"
+    tier = "S-TIER" if build.rank == 1 else f"RANK {build.rank}"
     return (
-        '<article class="guide-card">'
-        f"<h3>{_e(build.playstyle_label or build.label)}</h3>"
-        f"<p>{_e(build.selection_reason or 'Strong current theorycraft result for this spec.')}</p>"
-        f"<p><span class=\"chip\">{_e(build.reliability_label or build.confidence_label)} reliability</span> "
-        f"<span class=\"chip\">{_e(build.performance_band or 'top theorycraft band')}</span> "
-        f"<span class=\"chip\" data-tooltip-id=\"metric:primary_index\">{_e(primary_index_label)} {primary_index:.1f}</span> {warning}</p>"
-        '<p><a href="#talents">View tree</a></p>'
-        "</article>"
+        '<article class="guide-card build-card"><div class="card-inner">'
+        '<div class="build-head">'
+        f'<span class="build-tier">{_e(tier)}</span>'
+        f"<h3>{_e(build.playstyle_label or build.label)}</h3></div>"
+        f'<p class="build-reason">{_e(build.selection_reason or "Strong current theorycraft result for this spec.")}</p>'
+        '<div class="chip-row">'
+        f'<span class="chip">{_e(build.reliability_label or build.confidence_label)} reliability</span> '
+        f'<span class="chip">{_e(build.performance_band or "top theorycraft band")}</span> '
+        f'<span class="chip chip-primary" data-tooltip-id="metric:primary_index">{_e(primary_index_label)} {primary_index:.1f}</span> '
+        f"{warning}</div>"
+        '<p class="build-cta"><a class="cta-btn" href="#talents">View talent tree ↓</a></p>'
+        "</div></article>"
+    )
+
+
+def _render_glance_panel(spec: GuideSpec) -> str:
+    build = spec.builds[0] if spec.builds else None
+    if build is None:
+        return ""
+    primary_index = build.primary_index if build.primary_index is not None else build.projected_dps_index
+    label = build.primary_index_label or "Projected Damage Index"
+    snapshots = _build_tree_snapshots(build)
+    bars = ""
+    if snapshots:
+        snapshot = max(snapshots, key=lambda item: item.level)
+        ae_pct = round(snapshot.ae_spent / snapshot.max_ae * 100) if snapshot.max_ae else 0
+        te_pct = round(snapshot.te_spent / snapshot.max_te * 100) if snapshot.max_te else 0
+        bars = (
+            '<div class="essence-bars">'
+            '<div><div class="essence-bar-head"><span>Ability Essence</span>'
+            f'<span class="ae-value">{snapshot.ae_spent} / {snapshot.max_ae}</span></div>'
+            f'<div class="essence-track"><div class="essence-fill ae" style="width: {ae_pct}%"></div></div></div>'
+            '<div><div class="essence-bar-head"><span>Talent Essence</span>'
+            f'<span class="te-value">{snapshot.te_spent} / {snapshot.max_te}</span></div>'
+            f'<div class="essence-track"><div class="essence-fill te" style="width: {te_pct}%"></div></div></div>'
+            "</div>"
+        )
+    reliability = build.reliability_label or build.confidence_label
+    band = build.performance_band or "top theorycraft"
+    return (
+        '<article class="guide-card frame-gold glance-card"><div class="card-inner">'
+        '<p class="glance-label">At a Glance</p>'
+        '<div class="glance-metric">'
+        f'<span class="glance-value" data-tooltip-id="metric:primary_index" tabindex="0">{primary_index:.1f}</span>'
+        f'<span class="glance-metric-label">{_e(label)}</span></div>'
+        f"{bars}"
+        '<div class="glance-facts">'
+        f'<div><div class="glance-fact-label">Reliability</div><div class="glance-fact-value">{_e(reliability)}</div></div>'
+        f'<div><div class="glance-fact-label">Band</div><div class="glance-fact-value band">{_e(band)}</div></div>'
+        "</div></div></article>"
     )
 
 
@@ -574,8 +910,11 @@ def _spec_roles(spec: GuideSpec) -> tuple[str, ...]:
 def _role_chips(spec: GuideSpec, *, tooltip_id: str = "") -> str:
     primary_role = spec.primary_role or spec.role
     chips: list[str] = []
-    tooltip = f' data-tooltip-id="{_e(tooltip_id)}"' if tooltip_id else ""
-    chips.append(f'<span class="chip" data-role-chip="{_e(primary_role)}"{tooltip}>{_e(_label(primary_role))}</span>')
+    tooltip = f' data-tooltip-id="{_e(tooltip_id)}" tabindex="0"' if tooltip_id else ""
+    dot = '<span class="chip-dot" aria-hidden="true"></span>' if tooltip_id else ""
+    chips.append(
+        f'<span class="chip chip-primary" data-role-chip="{_e(primary_role)}"{tooltip}>{dot}{_e(_label(primary_role))}</span>'
+    )
     for role in spec.secondary_roles:
         if role == primary_role:
             continue
@@ -613,102 +952,149 @@ def _weapon_armor_chip(spec: GuideSpec) -> str:
 def _render_rotation_section(spec: GuideSpec) -> str:
     build = spec.builds[0] if spec.builds else None
     guide = dict(build.rotation_guide or {}) if build else {}
+    head = _section_head("Rotation")
     if guide:
-        sections = []
+        cards = []
         quick_priority = [
             *guide.get("priority_rules", []),
             *guide.get("core_loop", []),
         ]
-        sections.append(_render_guide_rule_list("Quick Priority", quick_priority))
-        sections.append(_render_guide_rule_list("Opener", guide.get("opener", [])))
-        sections.append(_render_guide_rule_list("Core Loop", guide.get("core_loop", [])))
-        sections.append(_render_guide_rule_list("Cooldowns", guide.get("cooldown_rules", [])))
-        sections.append(_render_guide_rule_list("Procs and Statuses", guide.get("proc_rules", [])))
+        cards.append(_render_guide_rule_card("Quick Priority", quick_priority))
+        cards.append(_render_guide_rule_card("Opener", guide.get("opener", [])))
+        cards.append(_render_guide_rule_card("Core Loop", guide.get("core_loop", [])))
+        cards.append(_render_guide_rule_card("Cooldowns", guide.get("cooldown_rules", [])))
+        cards.append(_render_guide_rule_card("Procs and Statuses", guide.get("proc_rules", [])))
         role_rules = [
             *guide.get("defensive_rules", []),
             *guide.get("healing_rules", []),
             *guide.get("support_rules", []),
         ]
-        sections.append(_render_guide_rule_list("Role Tools", role_rules))
-        sections.append(_render_guide_rule_list("AoE Adjustments", guide.get("aoe_adjustments", [])))
+        cards.append(_render_guide_rule_card("Role Tools", role_rules))
+        cards.append(_render_guide_rule_card("AoE Adjustments", guide.get("aoe_adjustments", [])))
+        extras = []
         reliability = guide.get("reliability")
         summary = dict(guide.get("simulation_summary") or {})
         if reliability:
-            sections.append(
-                f'<p><span class="chip">{_e(reliability)} rotation reliability</span> '
-                f'<span class="chip">{_e(str(summary.get("action_count", 0)))} simulated actions</span></p>'
+            extras.append(
+                f'<div class="chip-row"><span class="chip">{_e(reliability)} rotation reliability</span> '
+                f'<span class="chip">{_e(str(summary.get("action_count", 0)))} simulated actions</span></div>'
             )
         warnings = guide.get("warnings") or []
         if warnings:
-            sections.append(_render_loop_list("Rotation Warnings", warnings))
-        body = "".join(section for section in sections if section)
-        return f'<section class="panel" id="rotation"><h2>Rotation</h2>{body}</section>'
+            warning_items = "".join(f"<li>{_e(warning)}</li>" for warning in warnings)
+            extras.append(f'<div class="section-note"><strong>Rotation Warnings</strong><ul>{warning_items}</ul></div>')
+        body = f'<div class="rotation-grid">{"".join(card for card in cards if card)}</div>'
+        if extras:
+            body += f'<div class="rotation-extras">{"".join(extras)}</div>'
+        return f'<section class="panel-section" id="rotation">{head}{body}</section>'
 
     loop = dict(build.rotation_loop or {}) if build else {}
     if not loop:
-        return '<section class="panel" id="rotation"><h2>Rotation</h2><p>Use the generated priority notes as an early rotation scaffold.</p></section>'
-    sections = [f'<p>{_e(loop.get("objective", ""))}</p>']
-    sections.append(_render_loop_list("Core Loop", loop.get("core_loop", [])))
-    sections.append(_render_loop_list("Opener and Setup", loop.get("opener", [])))
-    sections.append(_render_loop_list("Cooldowns", loop.get("cooldowns", [])))
+        return (
+            f'<section class="panel-section" id="rotation">{head}'
+            '<div class="sub-panel"><p>Use the generated priority notes as an early rotation scaffold.</p></div></section>'
+        )
+    cards = [
+        _render_loop_card("Core Loop", loop.get("core_loop", [])),
+        _render_loop_card("Opener and Setup", loop.get("opener", [])),
+        _render_loop_card("Cooldowns", loop.get("cooldowns", [])),
+    ]
     role_steps = loop.get("defensive_or_support", [])
     if role_steps:
-        sections.append(_render_loop_list("Defensive, Healing, or Support Priorities", role_steps))
+        cards.append(_render_loop_card("Defensive, Healing, or Support Priorities", role_steps))
+    extras = []
+    if loop.get("objective"):
+        extras.append(f"<p>{_e(loop['objective'])}</p>")
     if loop.get("resource_rule"):
-        sections.append(f'<p><strong>Resource Rule:</strong> {_e(loop["resource_rule"])}</p>')
+        extras.append(f'<p><strong>Resource Rule:</strong> {_e(loop["resource_rule"])}</p>')
     if loop.get("maintenance_rule"):
-        sections.append(f'<p><strong>Maintenance Rule:</strong> {_e(loop["maintenance_rule"])}</p>')
+        extras.append(f'<p><strong>Maintenance Rule:</strong> {_e(loop["maintenance_rule"])}</p>')
     reliability = loop.get("reliability_label")
     if reliability:
-        sections.append(f'<p><span class="chip">{_e(reliability)} rotation reliability</span></p>')
-    return f'<section class="panel" id="rotation"><h2>Rotation</h2>{"".join(sections)}</section>'
+        extras.append(f'<div class="chip-row"><span class="chip">{_e(reliability)} rotation reliability</span></div>')
+    body = f'<div class="rotation-grid">{"".join(card for card in cards if card)}</div>'
+    if extras:
+        body += f'<div class="rotation-extras">{"".join(extras)}</div>'
+    return f'<section class="panel-section" id="rotation">{head}{body}</section>'
 
 
-def _render_guide_rule_list(title: str, rules: Any) -> str:
-    values = [dict(rule) for rule in rules or [] if isinstance(rule, dict)]
-    if not values:
+def _rotation_card(title: str, rows: list[str]) -> str:
+    if not rows:
         return ""
+    return (
+        '<div class="guide-card rotation-card"><div class="card-inner">'
+        f'<h3>{DIAMOND}{_e(title)}</h3>'
+        f'<ol class="step-list">{"".join(rows)}</ol></div></div>'
+    )
+
+
+def _render_guide_rule_card(title: str, rules: Any) -> str:
+    values = [dict(rule) for rule in rules or [] if isinstance(rule, dict)]
     rows = []
-    for rule in values[:12]:
+    for index, rule in enumerate(values[:12], start=1):
         ability = str(rule.get("ability_name") or "Ability")
         url = str(rule.get("db_url") or "")
         label = f'<a href="{_e(url)}">{_e(ability)}</a>' if url else _e(ability)
         text = str(rule.get("text") or f"Use {ability}.")
         condition = str(rule.get("condition") or "")
         condition_html = f' <span class="muted">({_e(condition)})</span>' if condition else ""
-        rows.append(f"<li><strong>{label}</strong>: {_e(text)}{condition_html}</li>")
-    return f"<h3>{_e(title)}</h3><ol>{''.join(rows)}</ol>"
+        rows.append(
+            f'<li><span class="step-num" aria-hidden="true">{index}</span>'
+            f'<span class="step-text"><strong>{label}</strong>: {_e(text)}{condition_html}</span></li>'
+        )
+    return _rotation_card(title, rows)
+
+
+def _render_loop_card(title: str, items: Any) -> str:
+    values = [str(item) for item in items or [] if str(item)]
+    rows = [
+        f'<li><span class="step-num" aria-hidden="true">{index}</span>'
+        f'<span class="step-text">{_e(item)}</span></li>'
+        for index, item in enumerate(values, start=1)
+    ]
+    return _rotation_card(title, rows)
 
 
 def _render_stats_section(spec: GuideSpec) -> str:
     build = spec.builds[0] if spec.builds else None
     report = dict(build.stat_priority_report or {}) if build else {}
+    head = _section_head("Stats")
     if not report:
-        return '<section class="panel warning" id="stats"><h2>Stats</h2><p>Stat priority is unavailable.</p></section>'
+        return (
+            f'<section class="panel-section" id="stats">{head}'
+            '<div class="section-note">Stat priority is unavailable.</div></section>'
+        )
     disclaimer = report.get("disclaimer")
-    warning = f'<p class="section-note">{_e(disclaimer)}</p>' if disclaimer else ""
+    warning = f'<p class="section-note stats-note">{_e(disclaimer)}</p>' if disclaimer else ""
     groups = []
     for group in report.get("groups", []):
         entries = "".join(
-            f'<span class="chip" title="{_e(entry.get("reason", ""))}">'
+            f'<span class="stat-chip" title="{_e(entry.get("reason", ""))}">'
+            f'<span class="stat-rank" aria-hidden="true">{index}</span>'
             f'{_e(str(entry.get("stat", "")).replace("_", " ").title())}</span>'
-            for entry in group.get("entries", [])
+            for index, entry in enumerate(group.get("entries", []), start=1)
         )
         if entries:
             groups.append(
-                f'<div><h3>{_e(group.get("label") or group.get("group_id") or "Stats")}</h3>'
-                f'<div class="chip-row">{entries}</div></div>'
+                f'<div class="sub-panel stat-group"><h3>{_e(group.get("label") or group.get("group_id") or "Stats")}</h3>'
+                f'<div class="stat-chips">{entries}</div></div>'
             )
-    if not groups:
-        groups.append("<p>Stat priority is unavailable.</p>")
-    return f'<section class="panel" id="stats"><h2>Stats</h2>{warning}{"".join(groups)}</section>'
+    if groups:
+        body = f'<div class="stat-groups">{"".join(groups)}</div>'
+    else:
+        body = '<div class="section-note">Stat priority is unavailable.</div>'
+    return f'<section class="panel-section" id="stats">{head}{warning}{body}</section>'
 
 
 def _render_gear_section(spec: GuideSpec) -> str:
     build = spec.builds[0] if spec.builds else None
     report = dict(build.gear_recommendation_report or {}) if build else {}
+    head = _section_head("Weapons and Armor")
     if not report:
-        return '<section class="panel" id="weapons-and-armor"><h2>Weapons and Armor</h2><p>Gear targeting is unavailable.</p></section>'
+        return (
+            f'<section class="panel-section" id="weapons-and-armor">{head}'
+            '<div class="sub-panel"><p>Gear targeting is unavailable.</p></div></section>'
+        )
     best = _render_type_group(
         "Best targets for this spec",
         tuple(report.get("best_weapon_types", [])) + tuple(report.get("best_armor_types", [])),
@@ -717,41 +1103,39 @@ def _render_gear_section(spec: GuideSpec) -> str:
         "Available to this class",
         tuple(report.get("available_weapon_types", [])) + tuple(report.get("available_armor_types", [])),
     )
-    warning_items = "".join(f"<li>{_e(warning)}</li>" for warning in report.get("warnings", []))
-    warnings = f'<div class="section-note"><ul>{warning_items}</ul></div>' if warning_items else ""
+    warning_values = [str(warning) for warning in report.get("warnings", []) if warning]
+    warnings = (
+        f'<p class="gear-note">Notes: {_e(" · ".join(warning_values).replace("_", " "))}</p>'
+        if warning_values
+        else ""
+    )
     return (
-        '<section class="panel" id="weapons-and-armor"><h2>Weapons and Armor</h2>'
-        f"{best}{available}{warnings}</section>"
+        f'<section class="panel-section" id="weapons-and-armor">{head}'
+        f'<div class="gear-groups">{best}{available}</div>{warnings}</section>'
     )
 
 
 def _render_type_group(title: str, values: tuple[str, ...]) -> str:
     unique_values = tuple(dict.fromkeys(value for value in values if value))
     if not unique_values:
-        return f"<h3>{_e(title)}</h3><p>Unknown.</p>"
-    chips = "".join(f'<span class="chip">{_e(value.replace("_", " ").title())}</span>' for value in unique_values)
-    return f'<h3>{_e(title)}</h3><div class="chip-row">{chips}</div>'
-
-
-def _render_loop_list(title: str, items: Any) -> str:
-    values = [str(item) for item in items or [] if str(item)]
-    if not values:
-        return ""
-    body = "".join(f"<li>{_e(item)}</li>" for item in values)
-    return f"<h3>{_e(title)}</h3><ol>{body}</ol>"
+        body = "<p>Unknown.</p>"
+    else:
+        chips = "".join(f'<span class="chip">{_e(value.replace("_", " ").title())}</span>' for value in unique_values)
+        body = f'<div class="chip-row">{chips}</div>'
+    return f'<div class="sub-panel gear-group"><h3>{_e(title)}</h3>{body}</div>'
 
 
 def _render_talent_tree_section(spec: GuideSpec) -> str:
+    head = _section_head("Talents")
     tree_builds = [build for build in spec.builds if build.tree_panel or build.tree]
     if not tree_builds:
-        return '<section class="panel" id="talents"><h2>Talents</h2><p>No talent tree data is available for this build.</p></section>'
+        return (
+            f'<section class="panel-section" id="talents">{head}'
+            '<div class="sub-panel"><p>No talent tree data is available for this build.</p></div></section>'
+        )
     first_panel = tree_builds[0].tree_panel
     first_tree = _first_panel_tree(first_panel) if first_panel else tree_builds[0].tree
     assert first_tree is not None
-    build_options = "".join(
-        f'<option value="{_e(_build_tree_panel_id(build))}">{_e(build.label)}</option>'
-        for build in tree_builds
-    )
     levels = sorted(
         {
             snapshot.level
@@ -759,24 +1143,54 @@ def _render_talent_tree_section(spec: GuideSpec) -> str:
             for snapshot in _build_tree_snapshots(build)
         }
     )
-    level_options = "".join(
-        f'<option value="{level}"{" selected" if level == first_tree.level else ""}>Level {level}</option>'
+    if not levels:
+        levels = [first_tree.level]
+    first_level = first_tree.level if first_tree.level in levels else levels[-1]
+    level_index = levels.index(first_level)
+    ticks = "".join(
+        f'<span data-level-tick="{level}" class="is-active">{level}</span>'
+        if level == first_level
+        else f'<span data-level-tick="{level}">{level}</span>'
         for level in levels
+    )
+    scrub = (
+        '<div class="scrub-wrap">'
+        '<div class="scrub-head"><span class="scrub-title">Character Level</span>'
+        f'<span class="scrub-level" data-tree-level-label>Lv {first_level}</span></div>'
+        f'<input type="range" class="level-scrub" data-tree-level-selector min="0" max="{len(levels) - 1}" '
+        f'step="1" value="{level_index}" data-tree-levels="{_json_attr(levels)}" aria-label="Character level">'
+        f'<div class="scrub-ticks">{ticks}</div></div>'
+    )
+    build_selector = ""
+    if len(tree_builds) > 1:
+        build_options = "".join(
+            f'<option value="{_e(_build_tree_panel_id(build))}">{_e(build.label)}</option>'
+            for build in tree_builds
+        )
+        build_selector = f'<label>Build <select data-tree-build-selector>{build_options}</select></label>'
+    legend = (
+        '<div class="tree-legend">'
+        '<span><span class="legend-dot legend-selected" aria-hidden="true"></span>Selected</span>'
+        '<span><span class="legend-dot legend-free" aria-hidden="true"></span>Granted (free)</span>'
+        '<span><span class="legend-dot legend-available" aria-hidden="true"></span>Available</span>'
+        '<span><span class="legend-dot legend-locked" aria-hidden="true"></span>Locked</span>'
+        '<span class="legend-hint">Hover or focus a node for its tooltip · click to pin — pins stack</span>'
+        "</div>"
     )
     panels = "".join(
         _render_build_tree_panel(build, hidden=index > 0)
         for index, build in enumerate(tree_builds)
     )
     return (
-        '<section class="panel" id="talents" data-guide-tree-panel>'
-        "<h2>Talents</h2>"
+        f'<section class="panel-section" id="talents" data-guide-tree-panel>{head}'
+        '<div class="frame"><div class="frame-inner">'
         '<div class="tree-toolbar">'
-        f'<label>Build <select data-tree-build-selector>{build_options}</select></label>'
-        f'<label>Level <select data-tree-level-selector>{level_options}</select></label>'
-        f'<span class="chip" data-tree-budget-summary>AE {first_tree.ae_spent}/{first_tree.max_ae} - TE {first_tree.te_spent}/{first_tree.max_te}</span>'
+        f"{scrub}{build_selector}"
+        f'<span class="chip mono" data-tree-budget-summary>AE {first_tree.ae_spent}/{first_tree.max_ae} - TE {first_tree.te_spent}/{first_tree.max_te}</span>'
         "</div>"
+        f"{legend}"
         f'<div class="tree-scroll">{panels}</div>'
-        "</section>"
+        "</div></div></section>"
     )
 
 
@@ -826,11 +1240,16 @@ def _render_build_tree_panel(build: Any, *, hidden: bool) -> str:
 
 def _render_tree_group(tree: Any) -> str:
     group_class = "passive-lane" if tree.tree_kind == "level_passives" else "tree-group"
+    node_count = len(tree.nodes)
     return (
         f'<div class="{group_class}" data-tree-kind="{_e(tree.tree_kind)}" data-tree-id="{_e(tree.tree_id)}" '
         f'data-tree-level="{tree.level}" data-tree-snapshots="{_json_attr([snapshot.to_dict() for snapshot in tree.snapshots])}">'
-        f'<h3>{_e(_tree_group_label(tree.tree_kind))}</h3>'
-        f'{_render_tree_canvas(tree)}</div>'
+        '<div class="tree-group-head">'
+        f"{DIAMOND}"
+        f"<h3>{_e(_tree_group_label(tree.tree_kind))}</h3>"
+        f'<span class="section-count">{node_count} node{"" if node_count == 1 else "s"}</span>'
+        '<span class="head-rule head-rule-dim" aria-hidden="true"></span></div>'
+        f"{_render_tree_canvas(tree)}</div>"
     )
 
 
@@ -866,7 +1285,9 @@ def _render_tree_node(node: Any) -> str:
     shape = "shape-square" if "square" in node.node_type.lower() else "shape-hex" if "hex" in node.node_type.lower() else "shape-circle"
     state_class = _tree_state_class(node.tree_state)
     label = _render_icon_content(node, "../assets")
-    rank = f"{node.rank}/{node.max_rank}" if node.max_rank > 1 else str(node.rank or 1)
+    rank_html = ""
+    if node.max_rank > 1:
+        rank_html = f'<span class="tree-rank">{_e(f"{node.rank}/{node.max_rank}")}</span>'
     style = _tree_node_style(node)
     return (
         f'<button class="tree-node {shape} {state_class}" data-tree-node-id="{node.entry_id}" '
@@ -874,7 +1295,7 @@ def _render_tree_node(node: Any) -> str:
         f'data-rank="{node.rank}" data-max-rank="{node.max_rank}" '
         f'style="{style}" '
         f'aria-label="{_e(node.name)}">'
-        f'{label}<span class="tree-rank">{_e(rank)}</span></button>'
+        f"{label}{rank_html}</button>"
     )
 
 
@@ -954,12 +1375,18 @@ def _render_leveling_path_for_build(build: Any) -> str:
 
 def _render_node(node: Any) -> str:
     icon = _render_icon_content(node, "../assets")
-    link = f'<a href="{_e(node.db_url)}" data-tooltip-id="{_e(node.tooltip_id)}">{_e(node.name)}</a>' if node.db_url else _e(node.name)
-    return (
-        '<article class="node-card">'
-        f'<span class="icon-frame">{icon}</span><span>{link}<br>'
-        f'<small>{_e(node.tab_name)} - {_e(node.essence_kind)} - Level {node.required_level}</small></span></article>'
+    meta = f"{node.tab_name} · {node.essence_kind} · Lv {node.required_level}"
+    inner = (
+        f'<span class="icon-frame" aria-hidden="true">{icon}</span>'
+        f'<span class="node-text"><span class="node-name">{_e(node.name)}</span>'
+        f'<span class="node-meta">{_e(meta)}</span></span>'
     )
+    if node.db_url:
+        return (
+            f'<a class="node-card" href="{_e(node.db_url)}" target="_blank" rel="noopener" '
+            f'data-tooltip-id="{_e(node.tooltip_id)}">{inner}</a>'
+        )
+    return f'<article class="node-card" data-tooltip-id="{_e(node.tooltip_id)}">{inner}</article>'
 
 
 def _render_icon_content(node: Any, asset_prefix: str) -> str:
