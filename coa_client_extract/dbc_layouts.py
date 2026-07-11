@@ -4,6 +4,13 @@ from .wdbc import DbcLayout, FieldSpec
 
 # Stock WotLK 3.3.5a offsets. Ascension may shift/extend these; drift detection
 # flags that, and the Task 10 acceptance test (spell 805775) validates/corrects them.
+#
+# M1.14A scope: this is the deliberately reduced spell family — Spell plus the three
+# index tables (cast time, duration, range) that resolve Spell.dbc's *_index columns. The
+# umbrella spec's fuller mechanical set (SpellCooldowns/category cooldowns, SpellRuneCost,
+# and the SpellEffect `effects[]` join) is deferred to a later M1.14 sub-milestone; those
+# tables are load-bearing for the M1.16 power model, not for M1.14A extraction. See
+# docs/data/client-spell-schema.md ("Mechanics scope").
 SPELL_FAMILY: dict[str, DbcLayout] = {
     "Spell": DbcLayout(
         name="Spell",

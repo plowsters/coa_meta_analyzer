@@ -4,14 +4,17 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .archive_backend import ArchiveBackend
+from .archive_backend import ArchiveBackend, ExtractedMember
 from .errors import ArchiveError
 
 ORDERING_RULE = "coa-archive-order-v1"
 _BASE = ("common", "common-2", "expansion", "lichking")
 _NUMERIC_PATCH = re.compile(r"^patch(-\d+)?$", re.IGNORECASE)
-_COA_PATCH = re.compile(r"^patch-C[A-Z]*$", re.IGNORECASE)   # patch-C, patch-CA … patch-CZZ
-_REBORN_PATCH = re.compile(r"^patch-W[A-Z]*$", re.IGNORECASE)  # Warcraft Reborn/Bronzebeard
+_COA_PATCH = re.compile(r"^patch-C[A-Z0-9]*$", re.IGNORECASE)   # patch-C, patch-CA … patch-CZZ
+# Warcraft Reborn/Bronzebeard. The suffix may carry digits (patch-WB1, patch-WC3), so the
+# class must allow them — a bare [A-Z]* silently mis-included the digit variants in the CoA
+# chain against Decision 18. Verified against the real client's patch-W* set.
+_REBORN_PATCH = re.compile(r"^patch-W[A-Z0-9]*$", re.IGNORECASE)
 _ANY_PATCH = re.compile(r"^patch(-[0-9A-Za-z]+)?$", re.IGNORECASE)
 
 
@@ -91,6 +94,21 @@ def discover_plan(client_root: Path) -> ArchivePlan:
     )
 
 
+def family_of(archive_name: str) -> str:
+    """Classify an archive filename into its CoA-relevant family. This is a raw provenance
+    signal only — M1.14B decides attribution from it, not M1.14A. Families: ``coa`` for the
+    patch-C* line, ``reborn`` for the excluded patch-W* line, ``base`` for the four stock
+    WotLK archives, and ``other`` for base-game Ascension patches whose family is undecided."""
+    stem = archive_name.rsplit(".", 1)[0]
+    if _COA_PATCH.match(stem):
+        return "coa"
+    if _REBORN_PATCH.match(stem):
+        return "reborn"
+    if stem.lower() in _BASE:
+        return "base"
+    return "other"
+
+
 def validate_ordering(
     plan: ArchivePlan, backend: ArchiveBackend, logical_path: str, expected_effective: Path
 ) -> None:
@@ -101,3 +119,27 @@ def validate_ordering(
             f"archive-plan ordering mismatch for {logical_path}: resolved "
             f"{member.effective_archive.name}, expected {expected_effective.name}"
         )
+
+
+def validate_load_order(plan: ArchivePlan, member: ExtractedMember) -> None:
+    """Fail closed if an extracted member's provenance is inconsistent with the plan's
+    declared load order. Two invariants must hold before any canonical artifact is written:
+    every archive that supplied bytes must be a member of the plan, and the winning
+    (effective) archive must be the highest-priority supplier under the plan's load order.
+    This proves the order StormLib actually applied matches the order CoA Codex declared —
+    the exit criterion that ordering is validated against a real overridden table."""
+    root, attach = plan.open_chain
+    priority = {p.name: i for i, p in enumerate((root, *attach))}
+    for archive in (*member.patch_chain, member.effective_archive):
+        if archive.name not in priority:
+            raise ArchiveError(
+                f"{member.logical_path}: supplier {archive.name} is not part of the archive "
+                f"plan; refusing to emit canonical artifacts"
+            )
+    winner = priority[member.effective_archive.name]
+    for archive in member.patch_chain:
+        if priority[archive.name] > winner:
+            raise ArchiveError(
+                f"{member.logical_path}: load order inverted — {archive.name} outranks the "
+                f"winning archive {member.effective_archive.name}"
+            )

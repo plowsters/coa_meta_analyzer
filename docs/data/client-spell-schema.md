@@ -13,7 +13,26 @@ is `unknown` until then); reconciliation into `coa-mechanics-v1` is M1.14C.
   absent)
 - `provenance`: `base_archive`, `patch_chain`, `effective_archive`, `source_dbcs`,
   `schema_match_confidence` (`high`|`low`), `extraction_date`
-- `coa_attribution`: `status` (`unknown` in M1.14A), plus raw signals (`archive_family`, `id_range`)
+  - `patch_chain` / `effective_archive` are StormLib's own reported chain of archives that
+    supplied the winning bytes (winner last), not the attach order.
+  - `source_dbcs` maps each contributing table (`Spell`, `SpellCastTimes`, `SpellDuration`,
+    `SpellRange`) to the archive that supplied it.
+- `coa_attribution`: `status` (`unknown` in M1.14A), plus raw signals:
+  - `archive_family`: family of the archive that supplied `Spell.dbc` — `coa` (patch-C*),
+    `base` (stock WotLK archives), `reborn` (patch-W*, normally excluded), or `other`.
+    Empirically (real client, 2026-07) the current authoritative `Spell.dbc` — carrying
+    spell `805775` = *Adrenal Venom* — is supplied by `patch-T.MPQ`, so `archive_family` is
+    `other`, **not** `coa`. Decision 18's patch-C*-only CoA heuristic is therefore
+    incomplete; reconciling the `patch-T` family into CoA attribution is M1.14B's job.
+  - `id_range`: coarse magnitude band of `spell_id` — `high` when `spell_id >= 100000`
+    (custom high-range content), else `base`. A raw signal; M1.14B owns id-range policy.
+
+## Mechanics scope (M1.14A)
+M1.14A extracts the reduced spell family: `Spell` plus the three index tables it references
+(`SpellCastTimes`, `SpellDuration`, `SpellRange`). The umbrella spec's fuller mechanical set
+— spell cooldowns/category cooldowns, rune cost, and the `SpellEffect` `effects[]` join — is
+**deferred to a later M1.14 sub-milestone**. Those tables are load-bearing for the M1.16
+power model, not for M1.14A extraction, and are tracked as follow-up rather than dropped.
 
 ## Consumer Rules
 - `schema_match_confidence: "low"` means DBC drift was detected for a contributing table; downstream

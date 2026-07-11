@@ -61,6 +61,31 @@ def test_truncated_file_raises():
         parse_dbc(data, _layout())
 
 
+def test_unknown_field_kind_raises_value_error():
+    # An unrecognized cell kind is a layout-definition bug and must be rejected loudly,
+    # not silently decoded as int32 (and it must surface even with zero records).
+    bad_layout = DbcLayout(
+        name="Toy", expected_field_count=3, expected_record_size=12,
+        columns={"id": FieldSpec(0, "uint32"), "mystery": FieldSpec(1, "int16")},
+    )
+    data = _build_dbc([], field_count=3, record_size=12)
+    with pytest.raises(ValueError):
+        parse_dbc(data, bad_layout)
+
+
+def test_column_index_beyond_record_boundary_raises():
+    # A column whose index reaches past its own record must raise DbcDriftError, scoped to
+    # the per-record boundary (not the end of all records).
+    layout = DbcLayout(
+        name="Toy", expected_field_count=2, expected_record_size=8,
+        columns={"id": FieldSpec(0, "uint32"), "past_end": FieldSpec(2, "uint32")},
+    )
+    rows = [struct.pack("<II", 1, 10), struct.pack("<II", 2, 20)]  # two 8-byte records
+    data = _build_dbc(rows, field_count=2, record_size=8)
+    with pytest.raises(DbcDriftError):
+        parse_dbc(data, layout)
+
+
 def test_real_spell_family_layouts_are_self_consistent():
     from coa_client_extract.dbc_layouts import SPELL_FAMILY
 

@@ -8,6 +8,7 @@ from .errors import DbcDriftError
 _HEADER = struct.Struct("<4sIIII")  # magic, records, fields, record_size, string_block_size
 _MAGIC = b"WDBC"
 _CELL = 4  # 3.3.5a DBC cells are 4 bytes
+_VALID_KINDS = frozenset({"int32", "uint32", "float", "str"})
 
 
 @dataclass(frozen=True)
@@ -64,13 +65,23 @@ def parse_dbc(data: bytes, layout: DbcLayout, *, strict: bool = False) -> DbcTab
         )
     string_block = data[string_start:string_start + string_size]
 
+    # An unrecognized cell kind is a layout-definition bug (caller error), not client drift;
+    # validate once up front so it surfaces even for a zero-record table.
+    for col, spec in layout.columns.items():
+        if spec.kind not in _VALID_KINDS:
+            raise ValueError(
+                f"{layout.name}: column {col!r} has unknown FieldSpec.kind {spec.kind!r} "
+                f"(expected one of {sorted(_VALID_KINDS)})"
+            )
+
     rows: list[dict] = []
     for i in range(record_count):
         base = records_start + i * record_size
+        record_end = base + record_size
         row: dict = {}
         for col, spec in layout.columns.items():
             off = base + spec.index * _CELL
-            if off + _CELL > string_start:
+            if off + _CELL > record_end:
                 raise DbcDriftError(f"{layout.name}: column {col!r} index out of record bounds")
             if spec.kind == "str":
                 (soff,) = struct.unpack_from("<I", data, off)
@@ -79,7 +90,7 @@ def parse_dbc(data: bytes, layout: DbcLayout, *, strict: bool = False) -> DbcTab
                 (row[col],) = struct.unpack_from("<f", data, off)
             elif spec.kind == "uint32":
                 (row[col],) = struct.unpack_from("<I", data, off)
-            else:  # int32
+            else:  # "int32" — the only remaining valid kind after the check above
                 (row[col],) = struct.unpack_from("<i", data, off)
         rows.append(row)
 

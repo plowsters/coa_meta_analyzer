@@ -61,6 +61,15 @@ def test_regenerate_writes_artifacts_with_injected_backend(tmp_path):
     spell = json.loads((out / "coa_client_spell.jsonl").read_text().splitlines()[0])
     assert spell["spell_id"] == 805775
     assert spell["coa_attribution"]["status"] == "unknown"
+    # fake fixture resolves Spell.dbc to common.MPQ (base family); 805775 is high-range
+    assert spell["coa_attribution"]["archive_family"] == "base"
+    assert spell["coa_attribution"]["id_range"] == "high"
+    # every contributing table records the archive that supplied it
+    assert set(spell["provenance"]["source_dbcs"]) == {
+        "Spell", "SpellCastTimes", "SpellDuration", "SpellRange"
+    }
+    # build descriptor derived from the discovered plan's top patch (patch-C.MPQ)
+    assert manifest["client_build"] == "3.3.5a+patch-C"
 
 
 def test_main_fails_closed_without_stormlib(tmp_path, capsys):

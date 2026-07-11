@@ -4,7 +4,13 @@ import hashlib
 import json
 from pathlib import Path
 
+from .archive_plan import family_of
 from .wdbc import DbcTable
+
+# Spell ids at or above this floor are custom high-range content; below it is stock
+# 3.3.5a/base-game range. A coarse, purely mechanical magnitude band — a raw attribution
+# signal only. M1.14B owns the actual id-range attribution policy.
+_CUSTOM_ID_FLOOR = 100_000
 
 
 def _index_lookup(table: DbcTable | None, value_key: str) -> dict[int, int]:
@@ -25,6 +31,11 @@ def build_client_spell_records(
     dur_by_idx = _index_lookup(durations, "base_ms")
     range_max = {row["id"]: row.get("max_yd") for row in ranges.rows} if ranges else {}
     range_min = {row["id"]: row.get("min_yd") for row in ranges.rows} if ranges else {}
+
+    # The whole Spell table is supplied by one effective archive, so its family is a
+    # record-independent raw signal recorded on every row for M1.14B to consume.
+    effective = provenance.get("effective_archive", "")
+    archive_family = family_of(effective) if effective else "unknown"
 
     records: list[dict] = []
     for row in spell.rows:
@@ -47,7 +58,11 @@ def build_client_spell_records(
                 **provenance,
                 "schema_match_confidence": "low" if spell.drift else "high",
             },
-            "coa_attribution": {"status": "unknown"},
+            "coa_attribution": {
+                "status": "unknown",  # M1.14A records raw signals; M1.14B decides
+                "archive_family": archive_family,
+                "id_range": "high" if row["id"] >= _CUSTOM_ID_FLOOR else "base",
+            },
         })
     return records
 
