@@ -50,10 +50,13 @@ the Builder oracle (`coa_scraper/dist/coa_entries.jsonl`: 3,612 records, 3,611 u
    179 columns, from `patch-M`). Measured:
    - **100% unique-spell recall** — every one of the 3,611 Builder spell IDs appears in its spell
      column.
-   - **100% node-level ownership** — once the alpha→display class rename (below) is applied, every
-     Builder spell's client class matches its Builder class (3,611/3,611). Without the rename it
-     *looks* like 85.5%; the 523-spell "gap" was exactly the three renamed classes. This is precisely
-     why parity must be measured at node level, not by spell-id recall.
+   - **100% unique-spell class attribution** — once the alpha→display class rename (below) is applied,
+     every *distinct* Builder spell maps to the expected client class (3,611/3,611 unique spell IDs).
+     Without the rename it *looks* like 85.5%; the 523-spell "gap" was exactly the three renamed
+     classes. This is unique-spell, **not** node-level: full node-level parity — the duplicated spell
+     and per-`(tab, entry_type)` multiplicity, measured as a multiset over the **3,612** Builder
+     records — is an M1.14B acceptance deliverable (see §Node-level Builder-parity validation), not yet
+     established.
    - **Current** — its row for spell `805775` reads *Adrenal Venom*, while the loose
      `CharacterAdvancementData.json` (a stale 2026-02-08 export of this table) and db.ascension.gg
      still say *Fang Venom: Lifeblood*.
@@ -89,6 +92,14 @@ names and must be renamed to their current display names:
 (Confirmed by the project owner — these were alpha classes revamped into existing classes — and by
 spell theme: SonOfArugal = blood, DemonHunter = fel, Monk = holy.) The band 14–35 spans 22 IDs; the
 playable set is the 21 IDs 14–34 with 35 excluded as a sentinel.
+
+**The rename is curated presentation metadata, not a client-native fact.** A client-native derivation
+was attempted and does not work by the obvious path: advancement nodes share spells with the *spec*
+skill lines (e.g. Venomancer → Stalking/Rot), not the class-band skill lines 475–495, so the
+`CharacterAdvancement` internal name cannot be linked to the `SkillLine` display name through shared
+spells. The three aliases are therefore recorded as curated aliases with explicit provenance (see
+§Attribution model, and Decision boundary in §Decision impacts), and the raw client
+`class_type_id` + internal name remain the independently-recoverable attribution identity.
 
 ## Non-Goals (staged, not dropped)
 
@@ -126,9 +137,10 @@ exactly like M1.14A's readers.
 The canonical node identity is the advancement-row id (`node_id`, col 0), **not** the spell id. Spell
 IDs are many-to-one with nodes: Builder spell `503748` is one spell realized as two Witch Doctor
 nodes (Brewing/Talent and Class/Ability), which is exactly why the Builder holds 3,612 records over
-3,611 unique spell IDs. `ConnectedNodes` and `RequiredIDs` reference the node-id domain (col 0), not
-the spell-id domain; the implementation must prove this during decode and reject the layout if the
-adjacency values do not resolve into the node-id set.
+3,611 unique spell IDs. Discovery *suggests* `ConnectedNodes` and `RequiredIDs` reference the node-id
+domain (col 0) rather than the spell-id domain, but this is a hypothesis: the implementation must
+prove the domain **independently for each** of the two fields (they are not assumed to share a domain)
+and reject the layout if the adjacency values do not resolve into the proven set.
 
 ## Layout decode and semantic validation
 
@@ -141,8 +153,10 @@ adjacency field that does not pass:
    value outside the known bands is flagged, not bucketed.
 2. **Adjacency resolves in the right domain** — every `ConnectedNodes`/`RequiredIDs` value resolves
    to an existing `node_id` (col 0); zero/padding slots normalize to empty; no dangling references.
-3. **Scalars fall in valid ranges** — AE/TE cost, required level, ranks, tab-investment gates within
-   documented bounds (e.g. required level 1–60, non-negative costs).
+3. **Scalars fall in valid ranges** — AE/TE cost, ranks, tab-investment gates within documented
+   bounds (non-negative costs); required level in `{0} ∪ [1, 60]`, where `0` normalizes to "no level
+   requirement" (available immediately), not "unknown" or padding. The normalization rule is recorded
+   with the field.
 4. **Field-by-field spot-check** — multiple known nodes per class are compared field-by-field against
    the Builder *and* against the in-game UI/tooltip for at least one spec, confirming the columns
    carry the meaning claimed.
@@ -157,48 +171,63 @@ confidence: low` remains reserved for structural WDBC drift, a separate conditio
 
 ## Attribution model
 
-`attribution.py` assigns a deterministic `coa_attribution` block per record from an explicit evidence
-truth table (no informal "corroboration raises confidence"):
+Attribution answers **participation**, not exclusive ownership — M1.14C needs "does this spell
+participate in CoA?", not "does CoA own it alone." `attribution.py` emits, per spell, `is_coa` +
+`modes[]` + `exclusive_mode`, plus the stable `memberships[]` (below). `confidence` follows an
+explicit evidence truth table (no informal "corroboration raises confidence"):
 
-| Evidence | `status` | `confidence` |
+| Evidence | contributes mode | `confidence` |
 |---|---|---|
 | CoA advancement membership (class-type 14–34) | `coa` | `high` |
 | Reborn advancement membership (class-type 36–46) | `reborn` | `high` |
-| ConquestOfAzeroth sentinel (class-type 35) | `coa_system` | `high` (marked non-playable) |
+| Stock/classless advancement membership (class-type 2–12) | `stock` | `high` |
+| ConquestOfAzeroth sentinel (class-type 35) | `coa_system` (marked non-playable) | `high` |
 | No advancement row, but on a CoA skill line | `coa` | `medium` |
-| No advancement row, high custom ID only | `unknown` | `low` |
-| Conflicting CoA + Reborn memberships | preserve both memberships; `status` unresolved, flagged | — |
-| Class-type outside known bands (possible new class / drift) | `unknown` | flagged |
+| No advancement row, high custom ID only | (no mode) | `low`, `is_coa: false` |
+| Class-type outside known bands (possible new class / drift) | flagged, no mode asserted | flagged |
 
+- `is_coa` is true iff any evidence contributes the `coa` mode. `modes[]` is the sorted set of all
+  modes the spell participates in; `exclusive_mode` is the single mode when `len(modes) == 1`, else
+  `null`. A spell in both CoA and Reborn (or CoA and stock) is legitimate multi-mode reuse:
+  `is_coa: true`, `modes: ["coa", "reborn"]`, `exclusive_mode: null` — not an "unresolved conflict."
 - **Primary signal = the advancement registry.** Skill-line and ID-range are only consulted for the
-  small set of client records *absent* from the graph; ID range alone yields `unknown` (it separates
-  custom from stock, not CoA from Reborn).
-- **`archive_family` is retained as raw provenance only** (known uninformative), so the artifact stays
-  honest about what was and wasn't used.
-- **The Builder is never an input.** It is the oracle used to *measure* this model. Absence from the
-  Builder is never negative evidence; client-only CoA nodes the Builder never exposed are retained.
+  small set of client records *absent* from the graph; ID range alone contributes no mode (it
+  separates custom from stock, not CoA from Reborn).
+- **`archive_family` is retained as raw provenance only** (known uninformative).
+- **The Builder is never an input to membership or mode attribution.** It is the oracle used to
+  *measure* this model. Absence from the Builder is never negative evidence.
+- **Curated display aliases are presentation metadata, not attribution inputs.** The three alpha→
+  display aliases are applied only to the human-readable `display` string, with explicit provenance;
+  they never change the client `class_type_id` or any `is_coa`/`modes` result, so the raw client
+  identity stays independently recoverable:
+
+  ```json
+  { "class_type_id": 22, "internal": "SonOfArugal", "display": "Bloodmage",
+    "kind": "coa_class", "display_source": "curated_alias",
+    "display_evidence": ["builder_class_name", "project_owner_confirmation"] }
+  ```
 
 ### Stable multi-membership
 
-A spell that appears on multiple nodes (different class/spec/context) is represented with a stable
-`memberships[]` array on the spell artifact, never with scalar `class`/`spec` fields that flip to
-arrays. Each advancement **node** record carries exactly one precise `(class, tab)` context; the
-**spell** record aggregates the nodes' contexts into `memberships[]`. A stock/classless membership
-never overwrites a legitimate CoA membership with `status: non_coa` — both are retained and the
-CoA membership wins for attribution.
+Each advancement **node** record carries exactly one precise `(class, tab)` context. The **spell**
+record aggregates those nodes into a stable `memberships[]` array — never scalar `class`/`spec` fields
+that flip to arrays. A stock/classless membership never overwrites a CoA membership; both are retained
+in `memberships[]`, and `is_coa` stays true.
 
 ```json
 {
   "spell_id": 503748,
-  "coa_attribution": { "status": "coa", "confidence": "high" },
+  "coa_attribution": { "is_coa": true, "modes": ["coa"], "exclusive_mode": "coa", "confidence": "high" },
   "memberships": [
-    { "mode": "coa", "class_type_id": 15, "class_name": "Witch Doctor",
+    { "mode": "coa", "class_type_id": 15, "class_internal": "WitchDoctor", "class_display": "Witch Doctor",
       "tab_type_id": 49, "tab_name": "Brewing", "node_id": 7131, "entry_type": "Talent" },
-    { "mode": "coa", "class_type_id": 15, "class_name": "Witch Doctor",
+    { "mode": "coa", "class_type_id": 15, "class_internal": "WitchDoctor", "class_display": "Witch Doctor",
       "tab_type_id": 1,  "tab_name": "Class",   "node_id": 12264, "entry_type": "Ability" }
   ]
 }
 ```
+(`tab_type_id` values are illustrative; the tab-type IDs are resolved from
+`CharacterAdvancementTabTypes` during decode.)
 
 ## Artifacts and schemas
 
@@ -220,7 +249,8 @@ to the Builder contract is an explicit adapter (below), because the current `coa
   "node_id": 6086,
   "spell_id": 805775,
   "name": "Adrenal Venom",
-  "class": { "class_type_id": 33, "internal": "Venomancer", "display": "Venomancer", "kind": "coa_class" },
+  "class": { "class_type_id": 33, "internal": "Venomancer", "display": "Venomancer",
+             "kind": "coa_class", "display_source": "client" },
   "tab":   { "tab_type_id": 1, "name": "Class" },
   "entry_type": "Ability",
   "essence_kind": "ability",
@@ -230,8 +260,8 @@ to the Builder contract is an explicit adapter (below), because the current `coa
     "required_ids": [], "connected_node_ids": [6096, 7235],
     "row": 5, "col": 3, "max_rank": 1
   },
-  "field_confidence": { "ae_cost": "high", "connected_node_ids": "high", "row": "medium" },
-  "raw": { "cols": [ /* all 179 raw column values, for audit */ ] },
+  "field_confidence": { "ae_cost": "high", "connected_node_ids": "high", "row": "high" },
+  "raw": { "cols": [ ] },
   "provenance": {
     "source_dbcs": {
       "CharacterAdvancement": { "effective_archive": "patch-M.MPQ", "schema_match_confidence": "high" },
@@ -241,35 +271,48 @@ to the Builder contract is an explicit adapter (below), because the current `coa
     "supersedes": { "source_file": "CharacterAdvancementData.json", "field_drift": ["name"] },
     "client_build": "3.3.5a+patch-CZZ", "extraction_date": "2026-07-13"
   },
-  "coa_attribution": { "status": "coa", "confidence": "high" }
+  "coa_attribution": { "is_coa": true, "modes": ["coa"], "exclusive_mode": "coa", "confidence": "high" }
 }
 ```
 
-Legality field names are chosen to *ease* the M1.15 adapter, but each carries a `field_confidence`;
-only `high` fields are eligible to feed the adapter.
+This is an illustrative *post-validation* record: every field shown is `high` confidence and the
+`raw.cols` block (elided here) holds all 179 raw column values for audit. Legality field names are
+chosen to *ease* the M1.15 adapter, but each carries a `field_confidence`; only `high` fields are
+eligible to feed the adapter.
 
 ### `coa-client-class-types-v1` and tab/essence metadata
 
 Node records alone cannot retire the Builder pipeline, which also consumes class/tab metadata
 (`coa_classes.json`) and essence caps (`coa_essence_caps.json`). M1.14B emits the resolved
 class-type and tab-type tables (with `kind`, internal name, display name, rename provenance) and an
-essence-cap table derived from `CharacterAdvancementEssence`, so M1.15 has the full set of inputs.
+essence-cap table from `CharacterAdvancementEssence`. That essence-cap derivation is **subject to the
+same decode-and-proof gate as node legality** — its semantics are not yet proven — so essence caps
+feed the adapter only once validated to `high` confidence.
 
-### M1.15 adapter (specified here, implemented in M1.15)
+### Decision 1 supersession is per-field, not wholesale (M1.15 adapter)
 
-The mapping from `coa-client-advancement-v1` → `coa-normalized-v1` is written down now so the
-transition is not hand-waved as a "direct field map":
+The Builder is retired **by responsibility**, one field at a time, not all at once. The adapter maps
+`coa-client-advancement-v1` → `coa-normalized-v1` with an explicit source, gate, and fallback per
+field, so a field the client cannot yet supply keeps its existing source, explicitly marked, rather
+than being fabricated:
 
-| `coa-normalized-v1` | source in client artifact |
-|---|---|
-| `entry_id` (numeric, required) | `node_id` |
-| `class_id`, `class_name` | `class.class_type_id`, `class.display` |
-| `tab_id`, `tab_name`, `tab_sort_order` | `tab.tab_type_id`, `tab.name`, from tab-types table |
-| `spell_id`, `spell_ids` | `spell_id`, plus rank-chain members |
-| `col`, `row` | `legality.col`, `legality.row` |
-| `ae_cost`/`te_cost`/`required_tab_ae`/`required_tab_te`/`required_level`/`max_rank` | `legality.*` (only `high`-confidence fields) |
-| `required_ids`, `connected_node_ids` | `legality.*` (node-id domain) |
-| `node_type`, `is_passive`, `is_starting_node` | derived from `entry_type` + essence/graph position |
+| `coa-normalized-v1` field(s) | source | gate / fallback |
+|---|---|---|
+| `entry_id` (numeric, required) | `node_id` | anchored (proven) |
+| `class_id`, `class_name` | `class.class_type_id`, `class.display` | anchored; `class_name` uses curated alias, provenance retained |
+| `tab_id`, `tab_name`, `tab_sort_order` | tab-types table | gated on tab-type decode |
+| `spell_id`, `spell_ids` | `spell_id` + rank-chain members | anchored |
+| `ae_cost`/`te_cost`/`required_tab_ae`/`required_tab_te`/`required_level`/`max_rank` | `legality.*` | only `high`-confidence fields feed; else Builder fallback, marked |
+| `required_ids`, `connected_node_ids` | `legality.*` (proven adjacency domain) | gated on adjacency-domain proof |
+| `col`, `row` | `legality.col`/`row` | gated; cosmetic, M1.15 layout may override |
+| `node_type`, `is_passive`, `is_starting_node` | client `NodeType`/`Flags`/`Spell.dbc` attributes **if a proven column exists** | **not inferable from `entry_type`+position**; if unproven, retain the existing inference/Builder source, explicitly marked |
+| `icon`, `description_html`/`description_text` | client `Spell.dbc` / spell artifact where available | else retain existing enrichment source, marked |
+| `tags`, `resources`, `damage_schools`, `inferred`, `field_sources`, `source_category` | existing inference pipeline (unchanged) | client does not supply these; not a Builder-legality concern |
+
+The guiding split: **client advancement graph** owns ownership + proven legality; **client spell
+artifact** owns name/mechanics/descriptions where available; the **existing inference pipeline** keeps
+owning tags/resources/schools; the **Builder is a fallback only for fields not yet replaced, and every
+such field is explicitly marked** so the remaining Builder surface is auditable and shrinks over time.
 
 ## Node-level Builder-parity validation
 
@@ -280,13 +323,16 @@ It measures node-level, not spell-level:
   node instances enumerated.
 - **Unique-spell recall** and **spell multiplicity** per class/spec (so shared nodes like `503748`
   are counted, not collapsed).
-- **Compound-key ownership**: agreement on `(spell_id, class, tab, entry_type)` after the alpha→
-  display rename, with every mismatch listed.
-- **Adjacency parity**: `ConnectedNodes`/`RequiredIDs` sets compared per node (in the node-id domain).
-- **Legality comparison**: AE/TE cost, level, gates — reported as differences, **not** pass/fail,
-  because the client is authoritative on conflict (Decision 22). Each difference is classified as an
-  extraction/layout defect (blocks; see gate) or a legitimate client-authoritative value difference
-  (accepted, client wins).
+- **Compound-key ownership (multiset)**: agreement on `(spell_id, class, tab, entry_type, occurrence)`
+  measured as a multiset over the **3,612** Builder records (or an explicit Builder-entry↔DBC-node
+  crosswalk), so the duplicated spell `503748` and per-tab/type multiplicity are counted, not
+  collapsed. Every mismatch listed.
+- **Adjacency parity**: `ConnectedNodes`/`RequiredIDs` sets compared per node, each in its
+  independently-proven ID domain.
+- **Legality comparison**: AE/TE cost, level, gates — reported as differences, **not** value pass/fail,
+  because the client is the offline authority (Decision 22). Each difference is classified into the
+  Decision 22 categories (a) extraction/layout defect, (b) verified client-current difference,
+  (c) representation difference, (d) unresolved — with (a)/(d) flagged flip-blocking.
 - **Currency corroboration**: the `805775` acid test plus a changelog spot-check confirm the client
   is live — used to corroborate that the client is current, not to override it.
 - **Report provenance pins** (Decision 10 reproducibility): client build, per-contributing-DBC
@@ -298,17 +344,37 @@ It measures node-level, not spell-level:
 - **Amend Decision 18.** Replace the archive-family attribution mechanism with the
   `CharacterAdvancement.dbc` registry as the primary CoA signal (archive family demoted to raw
   provenance; skill-line/ID-range only for graph-absent records). The principle is unchanged.
-- **New Decision 21 (staged Decision 1 supersession).** The CoA client advancement graph is the
-  candidate canonical source for the talent graph and legality, superseding Decision 1's "Builder is
-  the Phase 1 source of truth," **gated** on: (a) the node-level parity report, and (b) the
-  semantic-layout validation, both passing. Until M1.15 performs the pipeline flip, the Builder
+- **New Decision 21 (staged Decision 1 supersession, per-field).** The CoA client advancement graph
+  is the candidate canonical source for the talent graph and legality, superseding Decision 1's
+  "Builder is the Phase 1 source of truth" **by responsibility, one field at a time** (see the adapter
+  field matrix), not wholesale. The flip is **gated** on: (a) the node-level parity report, and (b) the
+  semantic-layout validation, both passing for the fields being flipped. Fields the client cannot yet
+  supply keep their existing source, explicitly marked. Until M1.15 performs the flip, the Builder
   remains the operative graph authority and the client artifact is validated-but-not-consumed.
-- **New Decision 22 (client authoritative for legality on conflict).** Where the client and Builder
-  disagree on a *value* (AE/TE cost, gate, prerequisite, level, rank), the client wins — it reflects
-  real in-game implementation (extends Decision 18 from mechanics to legality, per project-owner
-  directive). This makes the flip gate a test of *extraction correctness*, not of value agreement:
-  legitimate client-vs-Builder value differences never block; unresolved column semantics, unresolved
-  ID domains, dangling adjacency, or ownership/identity defects do.
+- **New Decision 22 (client DBC is the canonical *offline* legality source; live corrections come
+  from user-reported overrides, not the Builder).** The current client DBC is the canonical offline
+  source for legality (AE/TE cost, gates, prerequisites, level, rank), extending Decision 18 from
+  mechanics to legality. It is **not** assumed identical to live server enforcement — the server can
+  hotfix costs, hidden prerequisites, scripted rank behavior, or level gates the client does not
+  reflect — so the precedence is:
+
+      user-reported, reproducibly-verified live override
+        >  current client DBC
+        >  (Builder / stale JSON / AscensionDB — informational only, never authoritative)
+
+  The Builder is removed from the legality authority chain entirely: it is itself an offline,
+  possibly-stale source of unknown fidelity to the server, so a Builder disagreement is informational,
+  never authoritative, and never value-blocking. Live corrections are captured through a versioned,
+  reviewable **manual-override layer fed by user-reported inaccuracies** (the mechanism the public site
+  will expose; its implementation is a later milestone, not M1.14B). A proven client value is used
+  until such an override supersedes it.
+
+  Each client-vs-Builder legality difference is classified as: **(a) extraction/layout defect** — the
+  client field is not proven decoded correctly → **blocks the flip**; **(b) verified client-current
+  difference** — client decoded to `high` confidence and simply differs from the Builder → accepted,
+  client wins offline; **(c) representation difference** — same value, different encoding → normalized;
+  **(d) unresolved** — not yet decoded/classified → **blocks the flip** as an extraction concern. Only
+  (a) and (d) block; a genuine proven difference (b) never blocks.
 
 ## Flip-gate pass/fail (consumed by M1.15)
 
@@ -316,12 +382,16 @@ M1.15 may flip the canonical source only when, for all 21 CoA classes:
 
 - Every advancement field feeding the adapter (identity, ownership, cost, gate, prerequisite,
   adjacency, rank) is decoded at `confidence: high` and passes semantic validation.
-- Node-level ownership agreement is 100% after the alpha→display rename; the playable-class set has
-  cardinality exactly 21 and the sentinel is excluded.
-- All adjacency references resolve in the node-id domain (no dangling/unresolved).
-- Class/tab/essence metadata artifacts are present and resolve.
-- Remaining client-vs-Builder differences are all classified as legitimate client-authoritative value
-  differences (Decision 22), with zero unresolved extraction/layout discrepancies.
+- Node-level ownership agreement is 100% after the alpha→display rename, measured as a **multiset**
+  over the 3,612 Builder records (compound identity `(spell_id, class, tab, entry_type, occurrence)`,
+  or a direct Builder-entry↔DBC-node crosswalk), not as a set over the 3,611 unique spell IDs; the
+  playable-class set has cardinality exactly 21 and the sentinel is excluded.
+- All adjacency references resolve in their proven ID domain (no dangling/unresolved), proven
+  independently for `ConnectedNodes` and `RequiredIDs`.
+- Class/tab/essence metadata artifacts are present and resolve (essence caps decoded to `high`).
+- Every remaining client-vs-Builder legality difference is classified per Decision 22, with **zero**
+  in classes (a) extraction/layout defect or (d) unresolved; genuine class-(b) differences (client
+  wins offline) are permitted.
 
 ## Error handling
 
@@ -343,9 +413,10 @@ Same three tiers as M1.14A; all committed fixtures synthetic/self-authored (redi
      identity, class/tab resolution; **semantic validation** — FK resolution, adjacency resolves in
      node-id domain, zero/padding slots normalize, dangling prerequisite rejected, out-of-range
      scalar rejected, column-semantic misassignment rejected *despite a matching WDBC header*.
-   - `attribution`: the full truth table incl. CoA/Reborn/sentinel, skill-line medium, ID-only
-     unknown, conflicting CoA+Reborn preserved-both, and a spell present in CoA and another mode not
-     overwritten to `non_coa`.
+   - `attribution`: the full truth table incl. CoA/Reborn/stock/sentinel; skill-line medium; ID-only
+     no-mode/`is_coa: false`; a CoA+Reborn spell → `is_coa: true`, `modes: ["coa","reborn"]`,
+     `exclusive_mode: null` (multi-mode reuse, not "unresolved"); a CoA+stock spell keeps `is_coa:
+     true` with the stock membership retained, not overwritten.
    - `artifacts`: `coa-client-advancement-v1` schema incl. `field_confidence`, `raw`, per-table
      provenance; stable `memberships[]` for a shared spell (503748 shape); `supersedes` present.
    - `parity`: synthetic mini-oracle vs synthetic graph → node counts, unique-spell recall, spell
@@ -355,9 +426,10 @@ Same three tiers as M1.14A; all committed fixtures synthetic/self-authored (redi
 2. **Native integration test** (`@pytest.mark.stormlib`, miniature MPQs): a base `CharacterAdvancement.dbc`
    overridden by a patch; assert effective-chain resolution and per-table provenance.
 3. **Local-client acceptance test** (`@pytest.mark.client`, real install): extract the real graph;
-   assert 100% node-level ownership after rename, exactly 21 playable classes, shared node `503748`
-   yields two Witch Doctor memberships, `805775` → `coa`/Venomancer/*Adrenal Venom*, adjacency
-   resolves in the node-id domain, and the parity report generates with all provenance pins.
+   assert 100% **multiset** node-level ownership over the 3,612 Builder records after rename, exactly
+   21 playable classes (sentinel excluded), shared node `503748` yields two Witch Doctor memberships,
+   `805775` → `is_coa: true`/Venomancer/*Adrenal Venom*, each adjacency field resolves in its proven
+   domain, and the parity report generates with all provenance pins.
 
 Testing standards follow M1.14E: assertions check intended behavior (ownership, semantic validity,
 parity math), never incidental output.
@@ -371,14 +443,15 @@ parity math), never incidental output.
   renamed), `high`-confidence legality fields, `raw` audit slots, `memberships[]` for shared spells,
   and per-table provenance. `coa-client-class-types-v1` + tab/essence metadata are emitted.
 - `coa_attribution` on `coa-client-spell-v1` is filled from the truth table; `805775` is
-  `coa`/Venomancer/`high` with current mechanical data.
-- The node-level parity report covers all 21 CoA classes: 100% node-level ownership after rename,
-  node counts + spell multiplicity + adjacency parity reported, every discrepancy classified as
-  extraction defect vs client-authoritative difference, with all Decision 10 provenance pins.
+  `is_coa: true`/Venomancer/`high` with current mechanical data.
+- The node-level parity report covers all 21 CoA classes: 100% **multiset** node-level ownership over
+  the 3,612 Builder records after rename, node counts + spell multiplicity + adjacency parity
+  reported, every legality discrepancy classified into the Decision 22 categories (with (a)/(d)
+  flip-blocking), and all Decision 10 provenance pins.
 - The playable-CoA class set is asserted to have cardinality exactly 21; the `ConquestOfAzeroth`
   sentinel is excluded from playable classes.
 - The loose `CharacterAdvancementData.json` is retained only as a QA drift signal; nothing downstream
   reads its values.
-- Decisions 18 (amended), 21 (staged flip + gate), and 22 (client-authoritative legality) are
-  recorded.
+- Decisions 18 (amended), 21 (staged per-field flip + gate), and 22 (client DBC canonical offline
+  legality; live corrections via user-reported overrides, not the Builder) are recorded.
 - Default `pytest` stays green through the fake backend; no legality/tree pipeline is rewired (M1.15).
