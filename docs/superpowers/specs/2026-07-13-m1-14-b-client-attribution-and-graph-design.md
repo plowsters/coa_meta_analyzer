@@ -250,7 +250,7 @@ to the Builder contract is an explicit adapter (below), because the current `coa
   "spell_id": 805775,
   "name": "Adrenal Venom",
   "class": { "class_type_id": 33, "internal": "Venomancer", "display": "Venomancer",
-             "kind": "coa_class", "display_source": "client" },
+             "kind": "coa_class" },
   "tab":   { "tab_type_id": 1, "name": "Class" },
   "entry_type": "Ability",
   "essence_kind": "ability",
@@ -261,7 +261,7 @@ to the Builder contract is an explicit adapter (below), because the current `coa
     "row": 5, "col": 3, "max_rank": 1
   },
   "field_confidence": { "ae_cost": "high", "connected_node_ids": "high", "row": "high" },
-  "raw": { "cols": [ ] },
+  "raw": { "cols": { } },
   "provenance": {
     "source_dbcs": {
       "CharacterAdvancement": { "effective_archive": "patch-M.MPQ", "schema_match_confidence": "high" },
@@ -276,18 +276,27 @@ to the Builder contract is an explicit adapter (below), because the current `coa
 ```
 
 This is an illustrative *post-validation* record: every field shown is `high` confidence and the
-`raw.cols` block (elided here) holds all 179 raw column values for audit. Legality field names are
+`raw.cols` block (elided here) is the index-keyed `{cell_index: value}` map of all raw columns for
+audit (the `display_source`/`display_evidence` of the class name live in `coa-client-class-types-v1`,
+joined by `class_type_id`, not duplicated per node). Legality field names are
 chosen to *ease* the M1.15 adapter, but each carries a `field_confidence`; only `high` fields are
 eligible to feed the adapter.
 
 ### `coa-client-class-types-v1` and tab/essence metadata
 
 Node records alone cannot retire the Builder pipeline, which also consumes class/tab metadata
-(`coa_classes.json`) and essence caps (`coa_essence_caps.json`). M1.14B emits the resolved
-class-type and tab-type tables (with `kind`, internal name, display name, rename provenance) and an
-essence-cap table from `CharacterAdvancementEssence`. That essence-cap derivation is **subject to the
-same decode-and-proof gate as node legality** — its semantics are not yet proven — so essence caps
-feed the adapter only once validated to `high` confidence.
+(`coa_classes.json`) and essence caps (`coa_essence_caps.json`). M1.14B emits the resolved class-type
+and tab-type tables (with `kind`, internal name, display name, rename provenance).
+
+**Essence (corrected against the real client):** the per-class essence *caps* are uniform documented
+constants (max Ability Essence 26 / Talent Essence 25, identical across classes — verified in
+`coa_essence_caps.json`), not a DBC-decoded quantity, so there is nothing to "decode to `high`" for
+caps. The client `CharacterAdvancementEssence` table (5,440 rows; columns `1..80 × 1..32`) is instead
+per-level/per-tier *essence-progression* data — a leveling input, not caps. M1.14B **extracts that
+table raw with provenance** into `coa-client-essence-v1` (semantics documented as undecoded) so it is
+present and auditable; **decoding its per-level semantics is an M1.15 leveling gate item**, surfaced
+explicitly as an `essence_progression` entry in the parity report's `flip_blockers` (see below), not
+silently deferred.
 
 ### Decision 1 supersession is per-field, not wholesale (M1.15 adapter)
 
@@ -336,8 +345,17 @@ It measures node-level, not spell-level:
 - **Currency corroboration**: the `805775` acid test plus a changelog spot-check confirm the client
   is live — used to corroborate that the client is current, not to override it.
 - **Report provenance pins** (Decision 10 reproducibility): client build, per-contributing-DBC
-  sha256, Builder artifact manifest/checksum + capture date + slug, extractor commit, the resolved
-  class-type set, and the resolved layout version.
+  sha256 (CharacterAdvancement, ClassTypes, TabTypes, Essence, Spell), Builder artifact
+  manifest/checksum + capture date + slug, extractor commit, the resolved class-type set, and the
+  resolved layout version.
+- **`flip_ready` verdict + `flip_blockers[]`.** The report ends with an explicit boolean `flip_ready`
+  and a `flip_blockers` list. Blockers are extraction-correctness failures — **any** ownership or
+  identity mismatch (non-exact multiset: builder-only or client-only CoA node instances ≠ 0), any
+  adjacency mismatch, any field below `high` confidence, an unresolved layout column, or
+  `essence_progression` still undecoded. Proven client-vs-Builder *legality value* differences
+  (Decision 22 class (b)) are recorded but are **not** blockers. Exact multiset ownership equality is
+  required: recall **and** precision over CoA nodes must both be 1.0 — a client graph that contains
+  every Builder node plus extra/wrongly-attributed CoA nodes is **not** flip-ready.
 
 ## Decision impacts
 
@@ -388,7 +406,10 @@ M1.15 may flip the canonical source only when, for all 21 CoA classes:
   playable-class set has cardinality exactly 21 and the sentinel is excluded.
 - All adjacency references resolve in their proven ID domain (no dangling/unresolved), proven
   independently for `ConnectedNodes` and `RequiredIDs`.
-- Class/tab/essence metadata artifacts are present and resolve (essence caps decoded to `high`).
+- Class/tab metadata artifacts are present and resolve; the raw `coa-client-essence-v1` table is
+  extracted with provenance, and its per-level decode is listed as an `essence_progression`
+  flip-blocker (an M1.15 leveling item), not silently deferred. Per-class essence caps are documented
+  constants (AE 26 / TE 25), not a DBC-decoded value.
 - Every remaining client-vs-Builder legality difference is classified per Decision 22, with **zero**
   in classes (a) extraction/layout defect or (d) unresolved; genuine class-(b) differences (client
   wins offline) are permitted.
@@ -441,7 +462,8 @@ parity math), never incidental output.
   header match alone.
 - `coa-client-advancement-v1` regenerates with node-id identity, resolved class/tab (alpha→display
   renamed), `high`-confidence legality fields, `raw` audit slots, `memberships[]` for shared spells,
-  and per-table provenance. `coa-client-class-types-v1` + tab/essence metadata are emitted.
+  and per-table provenance. `coa-client-class-types-v1`, `coa-client-tab-types-v1`, and the raw
+  `coa-client-essence-v1` metadata are emitted.
 - `coa_attribution` on `coa-client-spell-v1` is filled from the truth table; `805775` is
   `is_coa: true`/Venomancer/`high` with current mechanical data.
 - The node-level parity report covers all 21 CoA classes: 100% **multiset** node-level ownership over
