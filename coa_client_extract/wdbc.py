@@ -95,3 +95,56 @@ def parse_dbc(data: bytes, layout: DbcLayout, *, strict: bool = False) -> DbcTab
         rows.append(row)
 
     return DbcTable(layout.name, field_count, record_size, record_count, rows, drift)
+
+
+@dataclass(frozen=True)
+class PositionalDbc:
+    field_count: int          # logical field count from the header (may exceed cell_count)
+    cell_count: int           # record_size // 4 — the number of addressable 4-byte cells
+    record_size: int
+    record_count: int
+    rows: list[dict]          # each row: {cell_index: uint32_value}
+    strings: bytes            # retained string block, for name/icon correlation
+    drift: bool
+
+    def read_string(self, offset: int) -> str:
+        if offset <= 0 or offset >= len(self.strings):
+            return ""
+        end = self.strings.find(b"\x00", offset)
+        if end < 0:
+            end = len(self.strings)
+        return self.strings[offset:end].decode("utf-8", "replace")
+
+
+def parse_positional(data: bytes, expected_field_count: int, expected_record_size: int,
+                     *, strict: bool = False) -> PositionalDbc:
+    """Decode every record as raw {cell_index: uint32} cells plus the string block, without a named
+    layout. Used for wide custom tables (CharacterAdvancement) addressed by index during decode.
+
+    Note the logical/raw distinction: the real CharacterAdvancement header reports field_count 179
+    while record_size 692 holds only 173 four-byte cells. Cells are addressed 0..cell_count-1;
+    field_count is preserved for provenance and drift, not for indexing."""
+    if len(data) < _HEADER.size:
+        raise DbcDriftError("file smaller than DBC header")
+    magic, record_count, field_count, record_size, string_size = _HEADER.unpack_from(data, 0)
+    if magic != _MAGIC:
+        raise DbcDriftError(f"bad magic {magic!r}, expected WDBC")
+    if record_size % _CELL != 0:
+        raise DbcDriftError(f"record_size {record_size} not a multiple of {_CELL}")
+    records_start = _HEADER.size
+    string_start = records_start + record_count * record_size
+    expected_len = string_start + string_size
+    if len(data) < expected_len:
+        raise DbcDriftError(f"truncated ({len(data)} bytes, expected >= {expected_len})")
+    drift = field_count != expected_field_count or record_size != expected_record_size
+    if drift and strict:
+        raise DbcDriftError(
+            f"field_count {field_count} / record_size {record_size} != expected "
+            f"{expected_field_count} / {expected_record_size}")
+    strings = data[string_start:string_start + string_size]
+    cell_count = record_size // _CELL
+    rows: list[dict] = []
+    for i in range(record_count):
+        base = records_start + i * record_size
+        rows.append({c: struct.unpack_from("<I", data, base + c * _CELL)[0] for c in range(cell_count)})
+    return PositionalDbc(field_count, cell_count, record_size, record_count, rows, strings, drift)

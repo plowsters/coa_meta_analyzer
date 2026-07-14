@@ -15,3 +15,9 @@ class ArchiveError(ExtractError):
 
 class DbcDriftError(ExtractError):
     """A DBC header disagreed with its declared layout beyond tolerance."""
+
+
+class DbcSemanticError(ExtractError):
+    """A DBC column layout matched its WDBC header but failed semantic validation
+    (foreign keys, adjacency domain, or value ranges). Distinct from DbcDriftError,
+    which is a structural header mismatch."""
