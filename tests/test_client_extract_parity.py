@@ -42,7 +42,7 @@ def test_exact_node_id_ownership_and_per_tab_counts():
     rep = build_parity_report(nodes, builder)
     assert rep["builder_records"] == 2 and rep["client_nodes"] == 2
     assert rep["builder_only_records"] == 0 and rep["client_only_records"] == 0
-    assert rep["identity_mismatches"] == 0
+    assert rep["hard_identity_mismatches"] == 0
     assert rep["ownership_recall"] == 1.0 and rep["ownership_precision"] == 1.0
     assert rep["per_class"]["Witch Doctor"]["client_nodes"] == 2
     brewing = next(x for x in rep["per_tab"]
@@ -136,7 +136,31 @@ def test_identity_mismatch_same_id_different_anchor_breaks_ownership():
     builder = [_builder(7131, 888888, "Witch Doctor", "Brewing", "Talent")]   # spell_id differs
     rep = build_parity_report(nodes, builder)
     assert rep["builder_only_records"] == 0 and rep["client_only_records"] == 0
-    assert rep["identity_mismatches"] == 1
+    assert rep["hard_identity_mismatches"] == 1
+    assert rep["representation_differences"] == 0
+    assert "identity_mismatch" in rep["blockers"]
+    assert rep["readiness"]["ownership_ready"] is False
+
+
+def test_class_name_spacing_is_representation_difference_not_hard():
+    nodes = [_node(7131, 503748, "WitchDoctor", "Brewing", "Talent")]
+    builder = [_builder(7131, 503748, "Witch Doctor", "Brewing", "Talent")]
+    rep = build_parity_report(nodes, builder)
+    assert rep["hard_identity_mismatches"] == 0
+    assert rep["raw_identity_mismatches"] == 1
+    assert rep["representation_differences"] == 1
+    assert rep["representation_difference_pairs"] == {"WitchDoctor → Witch Doctor": 1}
+    assert rep["class_label_normalization"] == "nfkc-casefold-remove-whitespace-v1"
+    assert rep["readiness"]["ownership_ready"] is True          # formatting diff does not block
+    assert "identity_mismatch" not in rep["blockers"]
+
+
+def test_semantic_class_name_change_still_blocks():
+    nodes = [_node(7131, 503748, "SunCleric", "Brewing", "Talent")]
+    builder = [_builder(7131, 503748, "Moon Cleric", "Brewing", "Talent")]
+    rep = build_parity_report(nodes, builder)
+    assert rep["hard_identity_mismatches"] == 1               # different class, not just spacing
+    assert rep["representation_differences"] == 0
     assert "identity_mismatch" in rep["blockers"]
     assert rep["readiness"]["ownership_ready"] is False
 

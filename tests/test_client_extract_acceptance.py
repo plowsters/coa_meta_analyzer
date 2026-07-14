@@ -75,7 +75,15 @@ def test_real_client_advancement_parity(tmp_path):
     assert report["unique_spell_recall"] == 1.0
     assert report["ownership_recall"] == 1.0                     # every Builder node covered
     assert report["builder_only_records"] == 0                   # no recall gap
-    assert report["identity_mismatches"] == 0
+    assert report["hard_identity_mismatches"] == 0                         # no semantic/spell divergence
+    assert report["raw_identity_mismatches"] > 0                           # client uses CamelCase labels
+    assert report["representation_differences"] == report["raw_identity_mismatches"]  # all are formatting
+    assert report["class_label_normalization"] == "nfkc-casefold-remove-whitespace-v1"
+    pairs = report["representation_difference_pairs"]
+    for key in ("WitchDoctor → Witch Doctor", "WitchHunter → Witch Hunter",
+                "KnightOfXoroth → Knight of Xoroth", "SunCleric → Sun Cleric"):
+        assert key in pairs and pairs[key] > 0
+    assert sum(pairs.values()) == report["representation_differences"]
     assert report["raw_ownership_precision"] < 1.0               # client leads the oracle; kept visible
     assert report["client_only_records"] == 2                    # the 2 client-ahead nodes
     vcc = {r["node_id"] for r in report["client_only_classification"]["verified_client_current"]}

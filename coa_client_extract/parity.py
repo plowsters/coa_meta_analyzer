@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import unicodedata
+from collections import Counter
+
 # adapter columns -> the CharacterAdvancementLayout attribute holding their column index.
 _SCALAR_FIELD_COLS = {
     "ae_cost": "ae_cost_col", "te_cost": "te_cost_col", "required_level": "required_level_col",
@@ -44,12 +47,19 @@ def flip_gate_inputs(layout):
     return low, unresolved
 
 
+_CLASS_LABEL_NORMALIZATION = "nfkc-casefold-remove-whitespace-v1"
+
+
+def canonical_class_label(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value)
+    return "".join(normalized.split()).casefold()
+
+
 def _identity(spell_id, class_name):
-    # The ownership-alignment identity uses ONLY the structurally-anchored fields: spell_id (col 5)
-    # and class (col 32 FK). tab_name/entry_type are decode-gated (often unresolved) and must NOT
-    # enter this tuple — otherwise a node whose tab/entry_type simply hasn't decoded would read as an
-    # identity mismatch, coupling ownership to metadata decode (which Decision 21 keeps independent).
-    return (int(spell_id), class_name)
+    # canonical identity: spell_id + canonicalized class label (NFKC + whitespace-strip + casefold), so a
+    # pure formatting difference is NOT a hard mismatch, while a semantic class change or a spell-ID
+    # divergence still is. Only the structurally-anchored spell_id/class enter this tuple (Decision 21).
+    return (int(spell_id), canonical_class_label(class_name))
 
 
 def _norm(v):
@@ -66,12 +76,16 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
 
     The Builder's `entry_id` and the client's `node_id` are the same advancement-row identity; the
     report crosswalks them directly and proves the id spaces align by checking each matched id's
-    anchored tuple (spell_id, class) — `identity_mismatches`. Ownership requires full Builder coverage
-    (`builder_only` empty) plus zero identity mismatches; a `client_only` node (the client leads the
-    stale Builder oracle) is accepted ONLY when explicitly adjudicated `verified_client_current` or
-    `representation_difference` — an unadjudicated (`unresolved`) or `extraction_defect` client-only
-    node still blocks ownership. Adjacency and legality are compared per matched node; legality
-    differences are classified per Decision 22.
+    anchored tuple (spell_id, class) against a canonicalized class label (NFKC + whitespace-strip +
+    casefold, `class_label_normalization`). A HARD identity mismatch (`hard_identity_mismatches`,
+    canonical labels differ or spell_id diverges) blocks ownership; a raw-only mismatch that
+    canonicalizes equal is a `representation_difference` — normalized and accepted, but kept visible
+    (raw count in `raw_identity_mismatches`, pairs in `representation_difference_pairs`). Ownership
+    requires full Builder coverage (`builder_only` empty) plus zero HARD identity mismatches; a
+    `client_only` node (the client leads the stale Builder oracle) is accepted ONLY when explicitly
+    adjudicated `verified_client_current` or `representation_difference` — an unadjudicated
+    (`unresolved`) or `extraction_defect` client-only node still blocks ownership. Adjacency and
+    legality are compared per matched node; legality differences are classified per Decision 22.
 
     There is NO single flip boolean. Instead `readiness` earns each dimension independently:
     `attribution_ready` (anchored class_type FK + 21-class cardinality, no legality dependency),
@@ -109,13 +123,22 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
     client_only_blocking = (client_only_classification["unresolved"]
                             + client_only_classification["extraction_defect"])
 
-    # identity: matched ids whose anchored (spell_id, class) tuple disagrees — proves the id spaces
-    # align (not accidental id collisions), using only structurally-verified anchors so an undecoded
-    # tab/entry_type never fabricates a mismatch.
-    identity_mismatch_ids = [
-        nid for nid in matched
-        if _identity(client_by_id[nid].spell_id, client_by_id[nid].class_display)
-        != _identity(builder_by_id[nid]["spell_id"], builder_by_id[nid]["class_name"])]
+    # identity: compare each matched node's (spell_id, class) against the Builder. A HARD mismatch
+    # (canonical labels differ, i.e. a semantic class change, OR spell_id diverges) blocks ownership; a
+    # raw-only mismatch that canonicalizes equal is a representation (formatting) difference — accepted,
+    # but kept visible.
+    raw_identity_mismatch_ids, hard_identity_mismatch_ids = [], []
+    representation_difference_pairs = Counter()
+    for nid in matched:
+        n, e = client_by_id[nid], builder_by_id[nid]
+        raw_diff = (int(n.spell_id) != int(e["spell_id"])) or (n.class_display != e["class_name"])
+        hard_diff = (_identity(n.spell_id, n.class_display) != _identity(e["spell_id"], e["class_name"]))
+        if raw_diff:
+            raw_identity_mismatch_ids.append(nid)
+        if hard_diff:
+            hard_identity_mismatch_ids.append(nid)
+        elif raw_diff:
+            representation_difference_pairs[f"{n.class_display} → {e['class_name']}"] += 1
 
     # adjacency parity (computed) over matched nodes that decoded adjacency to `high`
     adjacency_mismatch_ids = set()
@@ -179,7 +202,7 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
     # accepted (client may LEAD the stale oracle, but only via explicit verified_client_current /
     # representation_difference adjudication — never recall alone) + count/cardinality/non-empty guards.
     ownership_ready = (bool(coa_nodes) and bool(builder_entries) and taxonomy_ok and count_ok
-                       and not builder_only_ids and not identity_mismatch_ids
+                       and not builder_only_ids and not hard_identity_mismatch_ids
                        and not client_only_blocking)
     # adjacency: BOTH edge domains decoded high AND zero per-node mismatches
     adjacency_ready = (field_ready("connected_node_ids") and field_ready("required_ids")
@@ -224,7 +247,7 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
         blockers.append("client_only_unresolved")
     if client_only_classification["extraction_defect"]:
         blockers.append("client_only_extraction_defect")
-    if identity_mismatch_ids:
+    if hard_identity_mismatch_ids:
         blockers.append("identity_mismatch")
     if adjacency_mismatch_ids:
         blockers.append("adjacency_mismatch")
@@ -243,8 +266,12 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
         "client_only_records": len(client_only_ids),
         "builder_only_sample": builder_only_ids[:20],
         "client_only_sample": client_only_ids[:20],
-        "identity_mismatches": len(identity_mismatch_ids),
-        "identity_mismatch_sample": sorted(identity_mismatch_ids)[:20],
+        "raw_identity_mismatches": len(raw_identity_mismatch_ids),
+        "hard_identity_mismatches": len(hard_identity_mismatch_ids),
+        "representation_differences": len(raw_identity_mismatch_ids) - len(hard_identity_mismatch_ids),
+        "class_label_normalization": _CLASS_LABEL_NORMALIZATION,
+        "representation_difference_pairs": dict(representation_difference_pairs),
+        "hard_identity_mismatch_sample": sorted(hard_identity_mismatch_ids)[:20],
         "per_class": per_class,
         "per_tab": per_tab,
         "adjacency_mismatches": len(adjacency_mismatch_ids),
