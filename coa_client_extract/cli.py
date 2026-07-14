@@ -32,6 +32,7 @@ def regenerate(
     layouts: dict[str, DbcLayout] | None = None,
     builder_entries_path: str | None = None,
     ca_decode_report: str | None = None,
+    client_only_adjudication_path: str | None = None,
 ) -> dict:
     if backend is None:
         from .stormlib_backend import StormLibBackend
@@ -124,7 +125,10 @@ def regenerate(
     assert_playable_cardinality(class_types)         # exactly 21 playable CoA classes (raises otherwise)
 
     nodes = read_advancement(ca_raw, class_types, tab_types, ca_layout)
-    validate_semantics(nodes, class_types, tab_types)   # FK/adjacency/range + graph invariants; fail closed
+    # CharacterAdvancement.dbc is a UNIFIED all-class registry (stock talents + meta + reborn + CoA +
+    # None). M1.14B owns the CoA subgraph: validate, emit, and parity-check ONLY coa_class nodes.
+    coa_nodes = [n for n in nodes if n.class_kind == "coa_class"]
+    validate_semantics(coa_nodes, class_types, tab_types)   # FK/adjacency/range + graph invariants; fail closed
     # skill-line fallback set is PROVEN from the graph's own CoA spells (per-spec lines, not a fixed range)
     coa_spell_ids = {n.spell_id for n in nodes if n.class_kind == "coa_class" and n.spell_id}
     coa_skill_lines = derive_coa_skill_lines(sla_raw.rows, coa_spell_ids)
@@ -148,7 +152,7 @@ def regenerate(
     }
     # current names come from the already-extracted spell records (Spell.dbc), not the CA string block
     spell_names = {r["spell_id"]: r.get("name", "") for r in spell_records}
-    adv_records = build_advancement_records(nodes, provenance=adv_provenance,
+    adv_records = build_advancement_records(coa_nodes, provenance=adv_provenance,
                                             spell_names=spell_names, attribution=spell_attr)
     class_type_records = build_class_type_records(class_types)
     tab_type_records = build_tab_type_records(tab_types)
@@ -193,10 +197,15 @@ def regenerate(
             "layout_version": "m1-14-b",
             "extraction_date": date.today().isoformat(),
         }
+        adjudication = None
+        if client_only_adjudication_path and Path(client_only_adjudication_path).is_file():
+            adjudication = {int(k): v for k, v in
+                            json.loads(Path(client_only_adjudication_path).read_text())["records"].items()}
         report = build_parity_report(
-            nodes, builder_entries, class_types=class_types,
+            coa_nodes, builder_entries, class_types=class_types,
             low_confidence_fields=low_conf, unresolved_layout_columns=unresolved_cols,
-            expected_builder_records=EXPECTED_BUILDER_RECORDS, provenance=pins,
+            expected_builder_records=EXPECTED_BUILDER_RECORDS,
+            client_only_adjudication=adjudication, provenance=pins,
         )
         outputs["coa_builder_parity_report.json"] = write_json(
             report, out_dir / "coa_builder_parity_report.json")
@@ -297,6 +306,8 @@ def main(argv: list[str] | None = None) -> int:
     reg.add_argument("--stormlib", default=None)
     reg.add_argument("--builder-entries", default=None)
     reg.add_argument("--decode-report", default="reports/client_extract/coa_ca_decode_report.json")
+    reg.add_argument("--client-only-adjudication",
+                     default="reports/client_extract/client_only_adjudication.json")
 
     dec = sub.add_parser("decode-advancement", help="decode & prove CharacterAdvancement.dbc columns")
     dec.add_argument("--client-root", required=True, type=Path)
@@ -310,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
             regenerate(
                 args.client_root, args.out, stormlib_path=args.stormlib,
                 builder_entries_path=args.builder_entries, ca_decode_report=args.decode_report,
+                client_only_adjudication_path=args.client_only_adjudication,
             )
         except BackendUnavailable as exc:
             print(f"error: {exc}", file=sys.stderr)

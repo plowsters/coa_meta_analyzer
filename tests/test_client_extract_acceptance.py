@@ -58,7 +58,8 @@ def test_real_client_advancement_parity(tmp_path):
 
     builder_path = Path("coa_scraper/dist/coa_entries.jsonl")
     try:
-        regenerate(CLIENT_ROOT, tmp_path, builder_entries_path=str(builder_path))
+        regenerate(CLIENT_ROOT, tmp_path, builder_entries_path=str(builder_path),
+                   client_only_adjudication_path="reports/client_extract/client_only_adjudication.json")
     except BackendUnavailable:
         pytest.skip("StormLib not available")
 
@@ -72,9 +73,16 @@ def test_real_client_advancement_parity(tmp_path):
     # --- node-id crosswalk Builder-parity: EXACT ownership (recall AND precision) after rename ---
     report = json.loads((tmp_path / "coa_builder_parity_report.json").read_text())
     assert report["unique_spell_recall"] == 1.0
-    assert report["ownership_recall"] == 1.0 and report["ownership_precision"] == 1.0
-    assert report["builder_only_records"] == 0 and report["client_only_records"] == 0
+    assert report["ownership_recall"] == 1.0                     # every Builder node covered
+    assert report["builder_only_records"] == 0                   # no recall gap
     assert report["identity_mismatches"] == 0
+    assert report["raw_ownership_precision"] < 1.0               # client leads the oracle; kept visible
+    assert report["client_only_records"] == 2                    # the 2 client-ahead nodes
+    vcc = {r["node_id"] for r in report["client_only_classification"]["verified_client_current"]}
+    assert {18821, 34451} <= vcc                                 # both adjudicated client-current
+    assert report["client_only_classification"]["unresolved"] == []
+    assert report["client_only_classification"]["extraction_defect"] == []
+    assert report["builder_refresh_recommended"] is True
     assert report["provenance"]["source_dbc_sha256"]["CharacterAdvancement"]   # reproducibility pins
     assert report["provenance"]["resolved_class_set"] == list(range(14, 35))   # 21 playable CoA ids
 

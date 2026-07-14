@@ -54,6 +54,9 @@ def test_exact_node_id_ownership_and_per_tab_counts():
     assert rep["readiness"]["attribution_ready"] is True
     assert rep["readiness"]["full_builder_retirement_ready"] is True
     assert rep["readiness"]["leveling_progression_ready"] is False   # essence undecoded, separate, never blocks
+    assert rep["builder_coverage_recall"] == 1.0 and rep["raw_ownership_precision"] == 1.0
+    assert rep["client_only_classification"]["unresolved"] == []
+    assert rep["builder_refresh_recommended"] is False
 
 
 def test_builder_only_node_breaks_ownership_not_attribution():
@@ -81,8 +84,49 @@ def test_client_only_node_breaks_ownership_precision():
     rep = build_parity_report(nodes, builder)
     assert rep["ownership_recall"] == 1.0 and rep["ownership_precision"] < 1.0
     assert rep["client_only_records"] == 1 and 99999 in rep["client_only_sample"]
-    assert "client_only_node_instances" in rep["blockers"]
+    # with NO adjudication passed, the client-only node is UNRESOLVED -> blocks ownership
+    assert "client_only_unresolved" in rep["blockers"]
     assert rep["readiness"]["ownership_ready"] is False
+    assert rep["client_only_classification"]["unresolved"][0]["node_id"] == 99999
+    assert rep["raw_ownership_precision"] < 1.0          # raw precision stays visible
+    assert rep["builder_refresh_recommended"] is True
+
+
+def test_adjudicated_client_only_node_is_ownership_ready():
+    # client covers every Builder node (recall 1.0) and adds one extra CoA node that the owner has
+    # adjudicated verified_client_current -> ownership is READY (client legitimately leads the oracle),
+    # the extra node is surfaced in client_only_classification, and raw precision stays visible.
+    nodes = [
+        _node(7131, 503748, "Witch Doctor", "Brewing", "Talent"),
+        _node(99999, 674, "Witch Doctor", "Class", "Ability"),   # not in Builder; client-ahead
+    ]
+    builder = [_builder(7131, 503748, "Witch Doctor", "Brewing", "Talent")]
+    rep = build_parity_report(
+        nodes, builder,
+        client_only_adjudication={99999: {"classification": "verified_client_current",
+                                          "reason": "current client CoA membership absent from older Builder capture"}})
+    assert rep["readiness"]["ownership_ready"] is True
+    assert rep["builder_only_records"] == 0 and rep["client_only_records"] == 1
+    assert rep["raw_ownership_precision"] < 1.0           # NOT hidden
+    assert rep["builder_coverage_recall"] == 1.0
+    vcc = rep["client_only_classification"]["verified_client_current"]
+    assert vcc and vcc[0]["node_id"] == 99999 and vcc[0]["spell_id"] == 674
+    assert rep["client_only_classification"]["unresolved"] == []
+    assert "client_only_unresolved" not in rep["blockers"]
+    assert rep["builder_refresh_recommended"] is True
+
+
+def test_extraction_defect_client_only_blocks_ownership():
+    # a client-only node adjudicated an extraction_defect must BLOCK ownership (safety net preserved)
+    nodes = [_node(7131, 503748, "Witch Doctor", "Brewing", "Talent"),
+             _node(99999, 999999, "Witch Doctor", "Class", "Ability")]
+    builder = [_builder(7131, 503748, "Witch Doctor", "Brewing", "Talent")]
+    rep = build_parity_report(
+        nodes, builder,
+        client_only_adjudication={99999: {"classification": "extraction_defect", "reason": "mis-decode"}})
+    assert rep["readiness"]["ownership_ready"] is False
+    assert "client_only_extraction_defect" in rep["blockers"]
+    assert rep["client_only_classification"]["extraction_defect"][0]["node_id"] == 99999
 
 
 def test_identity_mismatch_same_id_different_anchor_breaks_ownership():

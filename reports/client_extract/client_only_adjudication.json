@@ -1,0 +1,22 @@
+{
+  "schema_version": "coa-client-only-adjudication-v1",
+  "capture": {
+    "adjudicated_date": "2026-07-14",
+    "builder_entries_file": "coa_entries.jsonl",
+    "note": "Curated human adjudication of CoA advancement nodes present in the current client but absent from the Builder oracle capture. A client-only node NOT listed here (or listed as unresolved) blocks ownership_ready. Classifications follow the generalized Decision 22 ownership discrepancy classes: verified_client_current (accepted), representation_difference (normalize+accept), extraction_defect (blocks), unresolved (blocks). The client is the canonical current source; Builder absence is evidence of oracle staleness, not negative ownership evidence."
+  },
+  "records": {
+    "18821": {
+      "classification": "verified_client_current",
+      "spell_id": 674,
+      "class": "Witch Doctor",
+      "reason": "current client CoA membership absent from older Builder capture (new CoA spell 674; on 0 Builder nodes, 1 client node)"
+    },
+    "34451": {
+      "classification": "verified_client_current",
+      "spell_id": 300534,
+      "class": "Guardian",
+      "reason": "additional current-client placement of an existing Builder spell (spell 300534 on 1 Builder node, 2 client nodes)"
+    }
+  }
+}

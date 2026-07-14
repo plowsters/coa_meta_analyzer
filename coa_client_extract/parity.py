@@ -19,6 +19,11 @@ _REQUIRED_LEGALITY = ("required_level", "ae_cost", "te_cost", "required_tab_ae",
 
 EXPECTED_BUILDER_RECORDS = 3612   # pinned Builder artifact size (the CLI passes this to guard truncation)
 
+# Generalized Decision-22 ownership discrepancy classes for a client-only node (a node the current
+# client has that the Builder capture lacks). ACCEPTED classes do not block ownership; everything else
+# (extraction_defect, or an unadjudicated node -> unresolved) blocks, preserving the parity safety net.
+_ACCEPTED_CLIENT_ONLY = ("verified_client_current", "representation_difference")
+
 
 def flip_gate_inputs(layout):
     """Derive (low_confidence_fields, unresolved_layout_columns) from a resolved
@@ -54,20 +59,24 @@ def _norm(v):
 
 def build_parity_report(nodes, builder_entries, *, class_types=None,
                         low_confidence_fields=(), unresolved_layout_columns=(),
-                        expected_builder_records=None, provenance=None) -> dict:
+                        expected_builder_records=None, client_only_adjudication=None,
+                        provenance=None) -> dict:
     """Node-level Builder-parity report + a SCOPED, per-responsibility/per-field `readiness` object
     (Decision 21), computing every comparison from a real node-id crosswalk.
 
     The Builder's `entry_id` and the client's `node_id` are the same advancement-row identity; the
     report crosswalks them directly and proves the id spaces align by checking each matched id's
-    anchored tuple (spell_id, class) — `identity_mismatches`. Ownership is an exact
-    SET over node ids: `builder_only` AND `client_only` must both be empty (a client graph that covers
-    every Builder node but adds extras is not ownership-ready). Adjacency and legality are compared per
-    matched node; legality differences are classified per Decision 22.
+    anchored tuple (spell_id, class) — `identity_mismatches`. Ownership requires full Builder coverage
+    (`builder_only` empty) plus zero identity mismatches; a `client_only` node (the client leads the
+    stale Builder oracle) is accepted ONLY when explicitly adjudicated `verified_client_current` or
+    `representation_difference` — an unadjudicated (`unresolved`) or `extraction_defect` client-only
+    node still blocks ownership. Adjacency and legality are compared per matched node; legality
+    differences are classified per Decision 22.
 
     There is NO single flip boolean. Instead `readiness` earns each dimension independently:
     `attribution_ready` (anchored class_type FK + 21-class cardinality, no legality dependency),
-    `ownership_ready` (exact ownership + zero identity_mismatches + count/cardinality guards),
+    `ownership_ready` (full recall + zero identity_mismatches + every client-only node adjudicated
+    accepted + count/cardinality guards),
     `adjacency_ready` (both edge domains decoded high AND zero adjacency_mismatches), per-field
     `legality[field]` (`ready` only when decoded high and not a Decision-22 (a)/(d) defect; else
     `unresolved`, which keeps the Builder fallback and blocks flipping THAT field only — never
@@ -84,6 +93,21 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
     matched = client_ids & builder_ids
     builder_only_ids = sorted(builder_ids - client_ids)
     client_only_ids = sorted(client_ids - builder_ids)
+
+    adj = client_only_adjudication or {}
+    client_only_classification = {"verified_client_current": [], "representation_difference": [],
+                                  "extraction_defect": [], "unresolved": []}
+    for nid in client_only_ids:
+        rec = adj.get(nid) or adj.get(str(nid)) or {}
+        cls = rec.get("classification")
+        entry = {"node_id": nid, "spell_id": client_by_id[nid].spell_id,
+                 "class": client_by_id[nid].class_display, "reason": rec.get("reason", "")}
+        bucket = cls if cls in ("verified_client_current", "representation_difference",
+                                "extraction_defect") else "unresolved"
+        client_only_classification[bucket].append(entry)
+    # client-only nodes that block ownership: unadjudicated (unresolved) OR flagged a real defect.
+    client_only_blocking = (client_only_classification["unresolved"]
+                            + client_only_classification["extraction_defect"])
 
     # identity: matched ids whose anchored (spell_id, class) tuple disagrees — proves the id spaces
     # align (not accidental id collisions), using only structurally-verified anchors so an undecoded
@@ -151,9 +175,12 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
 
     # attribution rests on the anchored class_type FK — NO legality dependency
     attribution_ready = bool(coa_nodes) and taxonomy_ok
-    # ownership: exact node-id ownership + identity-tuple parity + count/cardinality/non-empty guards
+    # ownership: full Builder coverage (recall) + identity parity + every client-only node adjudicated
+    # accepted (client may LEAD the stale oracle, but only via explicit verified_client_current /
+    # representation_difference adjudication — never recall alone) + count/cardinality/non-empty guards.
     ownership_ready = (bool(coa_nodes) and bool(builder_entries) and taxonomy_ok and count_ok
-                       and not builder_only_ids and not client_only_ids and not identity_mismatch_ids)
+                       and not builder_only_ids and not identity_mismatch_ids
+                       and not client_only_blocking)
     # adjacency: BOTH edge domains decoded high AND zero per-node mismatches
     adjacency_ready = (field_ready("connected_node_ids") and field_ready("required_ids")
                        and not adjacency_mismatch_ids)
@@ -193,8 +220,10 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
         blockers.append("builder_record_count")
     if builder_only_ids:
         blockers.append("builder_only_node_instances")
-    if client_only_ids:
-        blockers.append("client_only_node_instances")
+    if client_only_classification["unresolved"]:
+        blockers.append("client_only_unresolved")
+    if client_only_classification["extraction_defect"]:
+        blockers.append("client_only_extraction_defect")
     if identity_mismatch_ids:
         blockers.append("identity_mismatch")
     if adjacency_mismatch_ids:
@@ -203,7 +232,7 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
     blockers += [f"unresolved_layout_column:{c}" for c in unresolved_layout_columns]
 
     report = {
-        "schema_version": "coa-builder-parity-v2",
+        "schema_version": "coa-builder-parity-v3",
         "builder_records": len(builder_entries),
         "client_nodes": len(coa_nodes),
         "unique_spell_recall": round(len(client_spells & builder_spells) / len(builder_spells), 4)
@@ -223,6 +252,10 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
         "legality_diffs": legality_diffs,
         "readiness": readiness,
         "blockers": blockers,
+        "builder_coverage_recall": ownership_recall,       # explicit: fraction of Builder nodes covered
+        "raw_ownership_precision": ownership_precision,     # kept visible; NOT redefined or hidden
+        "client_only_classification": client_only_classification,
+        "builder_refresh_recommended": bool(client_only_ids),
     }
     if provenance:
         report["provenance"] = dict(provenance)   # Decision 10 reproducibility pins
