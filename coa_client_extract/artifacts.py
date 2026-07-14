@@ -84,3 +84,84 @@ def write_json(doc: dict, path: Path) -> str:
     data = (json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     path.write_bytes(data)
     return _sha256_bytes(data)
+
+
+def _attribution_block(attr) -> dict:
+    """One participation block from a SpellAttribution, or the low/absent default."""
+    if attr is None:
+        return {"is_coa": False, "modes": [], "exclusive_mode": None, "confidence": "low"}
+    r = attr.result
+    return {"is_coa": r.is_coa, "modes": list(r.modes),
+            "exclusive_mode": r.exclusive_mode, "confidence": r.confidence}
+
+
+def build_advancement_records(nodes, *, provenance: dict, spell_names: dict | None = None,
+                              attribution: dict | None = None) -> list[dict]:
+    spell_names = spell_names or {}
+    attribution = attribution or {}
+    records = []
+    for n in nodes:
+        records.append({
+            "schema_version": "coa-client-advancement-v1",
+            "node_id": n.node_id,
+            "spell_id": n.spell_id,
+            "name": spell_names.get(n.spell_id, ""),   # current name from coa-client-spell-v1 join
+            "class": {"class_type_id": n.class_type_id, "internal": n.class_internal,
+                      "display": n.class_display, "kind": n.class_kind},
+            "tab": {"tab_type_id": n.tab_type_id, "name": n.tab_name},
+            "entry_type": n.entry_type,
+            "essence_kind": n.essence_kind,
+            "legality": n.legality,
+            "field_confidence": n.field_confidence,
+            "raw": {"cols": dict(n.raw)},              # index-keyed {cell_index: value} audit map
+            "provenance": dict(provenance),
+            "coa_attribution": _attribution_block(attribution.get(n.spell_id)),
+        })
+    return records
+
+
+def build_class_type_records(class_types) -> list[dict]:
+    out = []
+    for ct in class_types.values():
+        out.append({
+            "schema_version": "coa-client-class-types-v1",
+            "class_type_id": ct.class_type_id,
+            "internal": ct.internal, "display": ct.display, "kind": ct.kind,
+            "display_source": ct.display_source,
+            "display_evidence": list(ct.display_evidence),
+        })
+    return out
+
+
+def build_tab_type_records(tab_types) -> list[dict]:
+    """Emit coa-client-tab-types-v1 from the resolved {tab_type_id: name} map."""
+    return [{"schema_version": "coa-client-tab-types-v1", "tab_type_id": tid, "name": name}
+            for tid, name in sorted(tab_types.items())]
+
+
+def build_essence_raw_records(essence, *, provenance: dict) -> list[dict]:
+    """Emit CharacterAdvancementEssence RAW as coa-client-essence-v1.
+
+    This table is per-level/per-tier essence *progression* data, NOT per-class caps (caps are the
+    documented uniform constants AE 26 / TE 25). Its per-level semantics are undecoded, so M1.14B
+    ships the raw index-keyed cells + provenance for auditability; the parity report reflects this as
+    `readiness.leveling_progression_ready: false` (an M1.15 leveling gate) and it NEVER blocks any
+    max-level readiness dimension or `full_builder_retirement_ready`. No column meaning is asserted here."""
+    return [{"schema_version": "coa-client-essence-v1", "cols": dict(row),
+             "provenance": dict(provenance)} for row in essence.rows]
+
+
+def fill_spell_attribution(spell_records, attribution) -> list[dict]:
+    for rec in spell_records:
+        # Retain the M1.14A raw signals (archive_family/id_range) as provenance (spec: archive
+        # family is kept as raw provenance only), and replace the M1.14A `status: unknown`.
+        raw = rec.get("coa_attribution", {})
+        keep = {k: raw[k] for k in ("archive_family", "id_range") if k in raw}
+        attr = attribution.get(rec.get("spell_id"))
+        block = _attribution_block(attr)
+        block.update(keep)
+        rec["coa_attribution"] = block
+        # Stable multi-membership: attach the aggregated memberships[] (never a scalar that flips
+        # to an array, never discarded). Absent attribution -> empty list.
+        rec["memberships"] = list(attr.memberships) if attr is not None else []
+    return spell_records
