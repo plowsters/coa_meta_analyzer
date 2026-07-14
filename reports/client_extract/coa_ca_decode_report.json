@@ -1,0 +1,388 @@
+{
+  "adjacency": [
+    {
+      "agreement": 0.0,
+      "block": [
+        2
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        14,
+        15
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        17,
+        18,
+        19
+      ],
+      "domain": "node_id",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        21,
+        22,
+        23
+      ],
+      "domain": "node_id",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        25,
+        26,
+        27,
+        28
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        30
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        40
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "domain": "node_id",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        131,
+        132,
+        133
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        151,
+        152
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        165
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    },
+    {
+      "agreement": 0.0,
+      "block": [
+        168
+      ],
+      "domain": "unresolved",
+      "json_field": null
+    }
+  ],
+  "entry_type_map": {},
+  "fields": {
+    "ae_cost_col": {
+      "column": 17,
+      "confidence": "low",
+      "in_fk_domain": true,
+      "margin": 0.0102,
+      "nonzero": 147,
+      "runner_up": 0.736,
+      "score": 0.7462
+    },
+    "column_col": {
+      "column": 30,
+      "confidence": "high",
+      "in_fk_domain": true,
+      "margin": 0.2426,
+      "nonzero": 148,
+      "runner_up": 0.6331,
+      "score": 0.8757
+    },
+    "entry_type_col": {
+      "column": null,
+      "confidence": "unproven",
+      "evidence": 0,
+      "mapping": {}
+    },
+    "max_rank_col": {
+      "column": null,
+      "confidence": "unproven"
+    },
+    "required_level_col": {
+      "column": 28,
+      "confidence": "high",
+      "in_fk_domain": true,
+      "margin": 0.3156,
+      "nonzero": 233,
+      "runner_up": 0.6393,
+      "score": 0.9549
+    },
+    "required_tab_ae_col": {
+      "column": null,
+      "confidence": "unproven"
+    },
+    "required_tab_te_col": {
+      "column": 39,
+      "confidence": "low",
+      "in_fk_domain": true,
+      "margin": 0.2486,
+      "nonzero": 331,
+      "runner_up": 0.3748,
+      "score": 0.6234
+    },
+    "row_col": {
+      "column": null,
+      "confidence": "unproven"
+    },
+    "tab_type_col": {
+      "column": 33,
+      "confidence": "low",
+      "in_fk_domain": true,
+      "margin": 0.7577,
+      "nonzero": 672,
+      "runner_up": 0.0103,
+      "score": 0.768
+    },
+    "te_cost_col": {
+      "column": 15,
+      "confidence": "low",
+      "in_fk_domain": true,
+      "margin": 0.0033,
+      "nonzero": 511,
+      "runner_up": 0.8331,
+      "score": 0.8363
+    }
+  },
+  "node_id_hit_rate": {
+    "0": 1.0,
+    "1": 0.0,
+    "100": 0.0,
+    "101": 0.0,
+    "102": 0.0,
+    "103": 0.0,
+    "104": 0.454,
+    "105": 0.581,
+    "106": 0.686,
+    "107": 0.716,
+    "108": 1.0,
+    "118": 0.0,
+    "119": 0.274,
+    "120": 0.024,
+    "121": 0.16,
+    "131": 0.917,
+    "132": 0.981,
+    "133": 0.989,
+    "134": 0.947,
+    "135": 0.857,
+    "136": 0.8,
+    "137": 1.0,
+    "14": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 0.0,
+    "149": 0.842,
+    "15": 1.0,
+    "150": 0.0,
+    "151": 0.999,
+    "152": 1.0,
+    "153": 0.764,
+    "154": 0.554,
+    "16": 0.768,
+    "160": 0.842,
+    "161": 0.799,
+    "162": 1.0,
+    "163": 0.773,
+    "164": 0.735,
+    "165": 0.903,
+    "167": 0.886,
+    "168": 0.957,
+    "17": 1.0,
+    "170": 0.784,
+    "171": 0.807,
+    "18": 1.0,
+    "19": 1.0,
+    "2": 0.98,
+    "20": 0.66,
+    "21": 1.0,
+    "22": 1.0,
+    "23": 1.0,
+    "24": 0.666,
+    "25": 1.0,
+    "26": 0.908,
+    "27": 0.905,
+    "28": 0.932,
+    "29": 0.037,
+    "3": 1.0,
+    "30": 0.997,
+    "31": 0.847,
+    "32": 0.81,
+    "33": 0.833,
+    "34": 0.564,
+    "35": 0.621,
+    "38": 0.252,
+    "39": 0.896,
+    "40": 0.999,
+    "41": 0.806,
+    "47": 0.11,
+    "48": 1.0,
+    "49": 1.0,
+    "5": 0.071,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "6": 0.076,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "64": 0.171,
+    "65": 0.992,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "7": 0.084,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "8": 0.046,
+    "80": 1.0,
+    "82": 0.999,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "9": 0.069,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0
+  },
+  "resolved_layout": {
+    "column_col": 30,
+    "confidence": {
+      "col": "high",
+      "required_level": "high"
+    },
+    "required_level_col": 28
+  },
+  "schema_version": "coa-ca-decode-report-v3",
+  "thresholds": {
+    "margin": 0.15,
+    "min_nonzero": 50,
+    "score": 0.85
+  },
+  "unique_pairs": 875
+}
