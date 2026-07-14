@@ -52,3 +52,24 @@ def test_base_only_file_reports_base_as_effective(tmp_path):
     assert _value_of(member.data) == 100
     assert member.effective_archive == base
     assert member.patch_chain[-1] == base
+
+
+def test_patch_overrides_base_for_character_advancement(tmp_path):
+    from tests.helpers.build_mpq import build_mpq
+
+    # Per-table provenance for the advancement family: a patch overriding
+    # CharacterAdvancement.dbc must win over the base, just like the spell-family case above.
+    base = build_mpq(tmp_path / "common.MPQ", {"DBFilesClient\\CharacterAdvancement.dbc": _dbc(100)})
+    patch = build_mpq(tmp_path / "patch-C.MPQ", {"DBFilesClient\\CharacterAdvancement.dbc": _dbc(999)})
+
+    backend = StormLibBackend()
+    member = backend.read_effective_file(base, (patch,), "DBFilesClient\\CharacterAdvancement.dbc")
+
+    # The patched value (999) must win over the base value (100).
+    assert _value_of(member.data) == 999
+    # Provenance comes from StormLib's own patch-chain report, not the attach order.
+    # For a complete override the winning archive is the sole supplier, and it is the
+    # effective archive.
+    assert member.effective_archive == patch
+    assert patch in member.patch_chain
+    assert member.patch_chain[-1] == patch

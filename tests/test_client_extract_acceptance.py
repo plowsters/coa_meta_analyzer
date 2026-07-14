@@ -31,7 +31,8 @@ def test_spell_805775_is_current_adrenal_venom(tmp_path):
     assert "Adrenal Venom" in venom["name"]
     assert "Fang Venom" not in venom["name"]  # not the stale db value
     assert venom["provenance"]["schema_match_confidence"] in ("high", "low")
-    assert venom["coa_attribution"]["status"] == "unknown"  # attribution is M1.14B
+    assert venom["coa_attribution"]["is_coa"] is True          # M1.14B fills attribution
+    assert "coa" in venom["coa_attribution"]["modes"]
 
     # Empirical finding (real client, 2026-07): the current authoritative Spell.dbc — the one
     # carrying 805775 = Adrenal Venom — is supplied by patch-T.MPQ, NOT a patch-C* archive.
@@ -48,3 +49,66 @@ def test_spell_805775_is_current_adrenal_venom(tmp_path):
     assert set(venom["provenance"]["source_dbcs"]) == {
         "Spell", "SpellCastTimes", "SpellDuration", "SpellRange"
     }
+
+
+@pytest.mark.skipif(not CLIENT_ROOT.is_dir(), reason="Ascension client not installed at COA_CLIENT_ROOT")
+def test_real_client_advancement_parity(tmp_path):
+    from coa_client_extract.cli import regenerate
+    from coa_client_extract.errors import BackendUnavailable
+
+    builder_path = Path("coa_scraper/dist/coa_entries.jsonl")
+    try:
+        regenerate(CLIENT_ROOT, tmp_path, builder_entries_path=str(builder_path))
+    except BackendUnavailable:
+        pytest.skip("StormLib not available")
+
+    # --- class taxonomy: exactly 21 playable CoA classes, ConquestOfAzeroth (35) sentinel excluded ---
+    class_types = [json.loads(l) for l in
+                   (tmp_path / "coa_client_class_types.jsonl").read_text().splitlines()]
+    playable = [c for c in class_types if c["kind"] == "coa_class"]
+    assert len(playable) == 21
+    assert all(c["class_type_id"] != 35 for c in playable)
+
+    # --- node-id crosswalk Builder-parity: EXACT ownership (recall AND precision) after rename ---
+    report = json.loads((tmp_path / "coa_builder_parity_report.json").read_text())
+    assert report["unique_spell_recall"] == 1.0
+    assert report["ownership_recall"] == 1.0 and report["ownership_precision"] == 1.0
+    assert report["builder_only_records"] == 0 and report["client_only_records"] == 0
+    assert report["identity_mismatches"] == 0
+    assert report["provenance"]["source_dbc_sha256"]["CharacterAdvancement"]   # reproducibility pins
+    assert report["provenance"]["resolved_class_set"] == list(range(14, 35))   # 21 playable CoA ids
+
+    # --- scoped readiness: attribution + ownership are earned (anchor-based, independent of legality);
+    #     every other dimension reports its HONEST decode-backed state (not forced green) ---
+    r = report["readiness"]
+    assert r["attribution_ready"] is True
+    assert r["ownership_ready"] is True
+    assert r["leveling_progression_ready"] is False
+    assert set(r["legality"]) == {"required_level", "ae_cost", "te_cost",
+                                  "required_tab_ae", "required_tab_te", "max_rank"}
+    assert set(r["layout"]) == {"row", "col"}
+    assert all(v in ("ready", "unresolved") for v in r["legality"].values())
+    assert all(v in ("ready", "unresolved") for v in r["layout"].values())
+    # the roll-up is EXACTLY its parts — never hand-forced true
+    assert r["full_builder_retirement_ready"] == (
+        r["attribution_ready"] and r["ownership_ready"] and r["adjacency_ready"]
+        and all(v == "ready" for v in r["legality"].values()))
+    # honesty cross-check: any legality field the decode left unresolved is named in `blockers`
+    for field, state in r["legality"].items():
+        if state == "unresolved":
+            assert any(field in b for b in report["blockers"])
+
+    # --- 805775 is current "Adrenal Venom" on a Venomancer node; attribution filled ---
+    adv = [json.loads(l) for l in
+           (tmp_path / "coa_client_advancement.jsonl").read_text().splitlines()]
+    venom = [n for n in adv if n["spell_id"] == 805775]
+    assert venom and any(n["class"]["display"] == "Venomancer" for n in venom)
+    assert any(n["name"] == "Adrenal Venom" for n in venom)
+    assert all(n["coa_attribution"]["is_coa"] is True for n in venom)
+
+    # --- shared spell 503748 = two distinct Witch Doctor nodes (node identity != spell identity) ---
+    assert len([n for n in adv if n["spell_id"] == 503748]) == 2
+    spells = {json.loads(l)["spell_id"]: json.loads(l) for l in
+              (tmp_path / "coa_client_spell.jsonl").read_text().splitlines()}
+    assert 503748 in spells and len(spells[503748]["memberships"]) == 2
+    assert all(m["class_display"] == "Witch Doctor" for m in spells[503748]["memberships"])
