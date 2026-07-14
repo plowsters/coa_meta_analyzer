@@ -30,6 +30,8 @@ def regenerate(
     backend: ArchiveBackend | None = None,
     stormlib_path: str | None = None,
     layouts: dict[str, DbcLayout] | None = None,
+    builder_entries_path: str | None = None,
+    ca_decode_report: str | None = None,
 ) -> dict:
     if backend is None:
         from .stormlib_backend import StormLibBackend
@@ -68,12 +70,137 @@ def regenerate(
     spell_records = build_client_spell_records(spell, cast, dur, rng, provenance=provenance)
     content_records = read_content_records(client_root / "Content")
 
+    # --- advancement pipeline: read the CoA advancement graph, attribute spells, and prove parity ---
+    import hashlib
+    from .class_types import resolve_class_types, resolve_tab_types, assert_playable_cardinality
+    from .advancement import read_advancement, validate_semantics
+    from .attribution import attribute, derive_coa_skill_lines, build_skill_line_index
+    from .artifacts import (
+        build_advancement_records, build_class_type_records, build_tab_type_records,
+        build_essence_raw_records, fill_spell_attribution,
+    )
+    from .decode_advancement import load_resolved_layout
+    # parse_dbc/parse_positional are already imported at module scope (used by read_table above);
+    # re-importing them here would shadow that name for this whole function and break read_table's
+    # closure over parse_dbc (a local import makes the name local to the entire enclosing scope).
+    from .dbc_layouts import (
+        CHARACTER_ADVANCEMENT_CLASS_TYPES, CHARACTER_ADVANCEMENT_TAB_TYPES, CHARACTER_ADVANCEMENT,
+        CHARACTER_ADVANCEMENT_ESSENCE, CHARACTER_ADVANCEMENT_SKILL_LINE_ABILITY,
+    )
+
+    # CANONICAL emission parses STRICT: a structural header mismatch raises before anything is written,
+    # so no canonical artifact is ever emitted with header drift. (Non-strict parsing lives only in the
+    # exploratory decode-advancement command.)
+    def read_named(name, layout):
+        m = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
+        return m, parse_dbc(m.data, layout, strict=True)          # named columns incl. "name" (col 1)
+
+    def read_positional(name, fc, rs):
+        m = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
+        return m, parse_positional(m.data, fc, rs, strict=True)   # {index: value} rows
+
+    ct_member, ct_tbl = read_named("CharacterAdvancementClassTypes", CHARACTER_ADVANCEMENT_CLASS_TYPES)
+    tt_member, tt_tbl = read_named("CharacterAdvancementTabTypes", CHARACTER_ADVANCEMENT_TAB_TYPES)
+    # The layout is the PROVEN one from the committed decode report (self-applying, no hand-edit); tests
+    # inject a synthetic layout; the anchors-only constant is only a last resort.
+    ca_layout = ((load_resolved_layout(ca_decode_report) if ca_decode_report else None)
+                 or (layouts.get("CharacterAdvancementLayout") if layouts else None)
+                 or CHARACTER_ADVANCEMENT)
+    ca_member, ca_raw = read_positional("CharacterAdvancement",
+                                        ca_layout.header_field_count, ca_layout.header_record_size)
+    ess_member, ess_raw = read_positional("CharacterAdvancementEssence",
+                                          CHARACTER_ADVANCEMENT_ESSENCE.expected_field_count,
+                                          CHARACTER_ADVANCEMENT_ESSENCE.expected_record_size)
+    sla_member, sla_raw = read_positional("SkillLineAbility",
+                                          CHARACTER_ADVANCEMENT_SKILL_LINE_ABILITY.expected_field_count,
+                                          CHARACTER_ADVANCEMENT_SKILL_LINE_ABILITY.expected_record_size)
+
+    # CharacterAdvancement is now a canonical CoA-overridden table too: fail closed before writing if
+    # StormLib's applied order disagrees with the plan's declared load order (same rule as Spell).
+    validate_load_order(plan, ca_member)
+
+    class_types = resolve_class_types(ct_tbl)
+    tab_types = resolve_tab_types(tt_tbl)
+    assert_playable_cardinality(class_types)         # exactly 21 playable CoA classes (raises otherwise)
+
+    nodes = read_advancement(ca_raw, class_types, tab_types, ca_layout)
+    validate_semantics(nodes, class_types, tab_types)   # FK/adjacency/range + graph invariants; fail closed
+    # skill-line fallback set is PROVEN from the graph's own CoA spells (per-spec lines, not a fixed range)
+    coa_spell_ids = {n.spell_id for n in nodes if n.class_kind == "coa_class" and n.spell_id}
+    coa_skill_lines = derive_coa_skill_lines(sla_raw.rows, coa_spell_ids)
+    skill_index = build_skill_line_index(sla_raw.rows, coa_skill_lines)
+    spell_attr = attribute(nodes, class_types, skill_line_index=skill_index)
+
+    adv_provenance = {
+        "client_build": _client_build(plan),
+        "source_dbcs": {"CharacterAdvancement": ca_member.effective_archive.name,
+                        "CharacterAdvancementClassTypes": ct_member.effective_archive.name,
+                        "CharacterAdvancementTabTypes": tt_member.effective_archive.name,
+                        "Spell": spell_member.effective_archive.name},
+        "supersedes": {"source_file": "CharacterAdvancementData.json"},
+        "extraction_date": date.today().isoformat(),
+    }
+    essence_provenance = {                           # names its OWN source table, not CharacterAdvancement
+        "client_build": _client_build(plan),
+        "source_dbcs": {"CharacterAdvancementEssence": ess_member.effective_archive.name},
+        "semantics": "undecoded_per_level_progression",
+        "extraction_date": date.today().isoformat(),
+    }
+    # current names come from the already-extracted spell records (Spell.dbc), not the CA string block
+    spell_names = {r["spell_id"]: r.get("name", "") for r in spell_records}
+    adv_records = build_advancement_records(nodes, provenance=adv_provenance,
+                                            spell_names=spell_names, attribution=spell_attr)
+    class_type_records = build_class_type_records(class_types)
+    tab_type_records = build_tab_type_records(tab_types)
+    essence_records = build_essence_raw_records(ess_raw, provenance=essence_provenance)  # raw; undecoded
+    spell_records = fill_spell_attribution(spell_records, spell_attr)
+
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs = {
         "coa_client_spell.jsonl": write_jsonl(spell_records, out_dir / "coa_client_spell.jsonl"),
         "coa_client_content.jsonl": write_jsonl(content_records, out_dir / "coa_client_content.jsonl"),
         "coa_client_archive_plan.json": write_json(plan.to_dict(), out_dir / "coa_client_archive_plan.json"),
     }
+    outputs["coa_client_advancement.jsonl"] = write_jsonl(adv_records, out_dir / "coa_client_advancement.jsonl")
+    outputs["coa_client_class_types.jsonl"] = write_jsonl(class_type_records, out_dir / "coa_client_class_types.jsonl")
+    outputs["coa_client_tab_types.jsonl"] = write_jsonl(tab_type_records, out_dir / "coa_client_tab_types.jsonl")
+    outputs["coa_client_essence.jsonl"] = write_jsonl(essence_records, out_dir / "coa_client_essence.jsonl")
+
+    if builder_entries_path:
+        from .parity import build_parity_report, flip_gate_inputs, EXPECTED_BUILDER_RECORDS
+        builder_path = Path(builder_entries_path)
+        builder_entries = [json.loads(l) for l in builder_path.read_text().splitlines()]
+        low_conf, unresolved_cols = flip_gate_inputs(ca_layout)          # 2-tuple; adjacency folded in
+        pins = {
+            "client_build": _client_build(plan),
+            "extractor_commit": _extractor_commit(),                    # git HEAD of this extractor tree
+            "source_dbc_sha256": {
+                "CharacterAdvancement": hashlib.sha256(ca_member.data).hexdigest(),
+                "CharacterAdvancementClassTypes": hashlib.sha256(ct_member.data).hexdigest(),
+                "CharacterAdvancementTabTypes": hashlib.sha256(tt_member.data).hexdigest(),
+                "CharacterAdvancementEssence": hashlib.sha256(ess_member.data).hexdigest(),
+                "Spell": hashlib.sha256(spell_member.data).hexdigest(),
+            },
+            "builder_entries_file": builder_path.name,
+            "builder_entries_sha256": hashlib.sha256(builder_path.read_bytes()).hexdigest(),
+            "builder_record_count": len(builder_entries),
+            "builder_build_slugs": sorted({e.get("build_slug") for e in builder_entries
+                                           if e.get("build_slug")}),
+            "decode_report_sha256": (hashlib.sha256(Path(ca_decode_report).read_bytes()).hexdigest()
+                                     if ca_decode_report and Path(ca_decode_report).is_file() else None),
+            "resolved_class_set": sorted(c.class_type_id for c in class_types.values()
+                                         if c.kind == "coa_class"),
+            "layout_version": "m1-14-b",
+            "extraction_date": date.today().isoformat(),
+        }
+        report = build_parity_report(
+            nodes, builder_entries, class_types=class_types,
+            low_confidence_fields=low_conf, unresolved_layout_columns=unresolved_cols,
+            expected_builder_records=EXPECTED_BUILDER_RECORDS, provenance=pins,
+        )
+        outputs["coa_builder_parity_report.json"] = write_json(
+            report, out_dir / "coa_builder_parity_report.json")
+
     manifest = build_manifest(
         backend_name=getattr(backend, "name", "unknown"),
         backend_version=getattr(backend, "version", "unknown"),
@@ -95,6 +222,17 @@ def _client_build(plan: ArchivePlan) -> str:
         top = plan.patch_archives[-1].name.rsplit(".", 1)[0]
         return f"3.3.5a+{top}"
     return "3.3.5a"
+
+
+def _extractor_commit():
+    """Best-effort git HEAD of the extractor tree, for parity/artifact provenance."""
+    import subprocess
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True,
+            cwd=str(Path(__file__).resolve().parent), stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return "unknown"
 
 
 def _load_content_entries(path: Path) -> list[dict]:
@@ -157,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
     reg.add_argument("--client-root", required=True, type=Path)
     reg.add_argument("--out", required=True, type=Path)
     reg.add_argument("--stormlib", default=None)
+    reg.add_argument("--builder-entries", default=None)
+    reg.add_argument("--decode-report", default="reports/client_extract/coa_ca_decode_report.json")
 
     dec = sub.add_parser("decode-advancement", help="decode & prove CharacterAdvancement.dbc columns")
     dec.add_argument("--client-root", required=True, type=Path)
@@ -167,7 +307,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "regenerate":
         try:
-            regenerate(args.client_root, args.out, stormlib_path=args.stormlib)
+            regenerate(
+                args.client_root, args.out, stormlib_path=args.stormlib,
+                builder_entries_path=args.builder_entries, ca_decode_report=args.decode_report,
+            )
         except BackendUnavailable as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2

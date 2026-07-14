@@ -19,6 +19,32 @@ def _client(tmp_path: Path) -> Path:
     return data
 
 
+def _pos_dbc(rows, fc, rs):
+    # positional DBC (no string block); rows: list of {col: int}
+    import struct
+    body = b"".join(struct.pack("<" + "I" * (rs // 4), *[r.get(c, 0) for c in range(rs // 4)]) for r in rows)
+    return struct.pack("<4sIIII", b"WDBC", len(rows), fc, rs, 0) + body
+
+
+def _named_dbc(rows, fc, rs, strings):
+    import struct
+    body = b"".join(struct.pack("<" + "I" * (rs // 4), *[r.get(c, 0) for c in range(rs // 4)]) for r in rows)
+    return struct.pack("<4sIIII", b"WDBC", len(rows), fc, rs, len(strings)) + body + strings
+
+
+def _ca_tables():
+    # CharacterAdvancement: one Venomancer node for 805775 (small synthetic layout, 10 cells/40 bytes)
+    ca = _pos_dbc([{0: 6086, 1: 805775, 2: 33, 3: 1, 4: 0, 5: 1, 6: 0, 7: 0, 8: 0, 9: 0}], 10, 40)
+    # ClassTypes: 21 playable (14..34) + sentinel (35) + one stock (2); only 33 is named "Venomancer"
+    ct_strings = b"\x00Venomancer\x00"
+    ct_rows = [{0: i, 1: (1 if i == 33 else 0)} for i in list(range(14, 35)) + [35, 2]]
+    ct = _named_dbc(ct_rows, 23, 92, ct_strings)
+    tt = _named_dbc([{0: 1, 1: 1}], 19, 76, b"\x00Class\x00")   # tab id 1 -> "Class"
+    ess = _pos_dbc([{0: 1, 1: 60, 2: 26}], 9, 36)               # raw progression row (semantics undecoded)
+    sla = _pos_dbc([], 14, 56)                                  # empty SkillLineAbility (fallback unused)
+    return ca, ct, tt, ess, sla
+
+
 def _fake_backend():
     import struct
     strings = b"\x00Adrenal Venom\x00"
@@ -35,13 +61,19 @@ def _fake_backend():
         "DBFilesClient\\SpellDuration.dbc": [(Path("common.MPQ"), dbc([dur], 2, 8))],
         "DBFilesClient\\SpellRange.dbc": [(Path("common.MPQ"), dbc([struct.pack("<I", 1) + b"\x00" * 152], 39, 156))],
     }
+    ca, ct, tt, ess, sla = _ca_tables()
+    entries["DBFilesClient\\CharacterAdvancement.dbc"] = [(Path("common.MPQ"), ca)]
+    entries["DBFilesClient\\CharacterAdvancementClassTypes.dbc"] = [(Path("common.MPQ"), ct)]
+    entries["DBFilesClient\\CharacterAdvancementTabTypes.dbc"] = [(Path("common.MPQ"), tt)]
+    entries["DBFilesClient\\CharacterAdvancementEssence.dbc"] = [(Path("common.MPQ"), ess)]
+    entries["DBFilesClient\\SkillLineAbility.dbc"] = [(Path("common.MPQ"), sla)]
     return FakeArchiveBackend(entries)
 
 
 def _synthetic_layouts():
     from coa_client_extract.wdbc import DbcLayout, FieldSpec
 
-    return {
+    layouts = {
         "Spell": DbcLayout("Spell", 4, 16, {
             "id": FieldSpec(0, "uint32"), "name": FieldSpec(1, "str"),
             "casting_time_index": FieldSpec(2, "uint32"), "duration_index": FieldSpec(3, "uint32"),
@@ -50,6 +82,13 @@ def _synthetic_layouts():
         "SpellDuration": DbcLayout("SpellDuration", 2, 8, {"id": FieldSpec(0, "uint32"), "base_ms": FieldSpec(1, "int32")}),
         "SpellRange": DbcLayout("SpellRange", 39, 156, {"id": FieldSpec(0, "uint32")}),
     }
+    from coa_client_extract.dbc_layouts import CharacterAdvancementLayout
+    layouts["CharacterAdvancementLayout"] = CharacterAdvancementLayout(
+        node_id_col=0, spell_id_col=1, class_type_col=2, tab_type_col=3, entry_type_col=4,
+        ae_cost_col=5, required_level_col=6, connected_node_cols=(7, 8), required_id_cols=(9,),
+        header_field_count=10, header_record_size=40,
+    )
+    return layouts
 
 
 def test_regenerate_writes_artifacts_with_injected_backend(tmp_path):
@@ -64,16 +103,29 @@ def test_regenerate_writes_artifacts_with_injected_backend(tmp_path):
     assert (out / "coa_client_extract_manifest.json").is_file()
     spell = json.loads((out / "coa_client_spell.jsonl").read_text().splitlines()[0])
     assert spell["spell_id"] == 805775
-    assert spell["coa_attribution"]["status"] == "unknown"
-    # fake fixture resolves Spell.dbc to common.MPQ (base family); 805775 is high-range
-    assert spell["coa_attribution"]["archive_family"] == "base"
+    # attribution is now filled from the client advancement graph (805775 -> Venomancer node)
+    assert spell["coa_attribution"]["is_coa"] is True
+    assert spell["coa_attribution"]["modes"] == ["coa"]
+    assert spell["coa_attribution"]["archive_family"] == "base"   # raw M1.14A signal retained
     assert spell["coa_attribution"]["id_range"] == "high"
+    assert spell["memberships"][0]["class_display"] == "Venomancer"   # stable memberships[] attached
     # every contributing table records the archive that supplied it
     assert set(spell["provenance"]["source_dbcs"]) == {
         "Spell", "SpellCastTimes", "SpellDuration", "SpellRange"
     }
     # build descriptor derived from the discovered plan's top patch (patch-C.MPQ)
     assert manifest["client_build"] == "3.3.5a+patch-C"
+
+    adv = [json.loads(l) for l in (out / "coa_client_advancement.jsonl").read_text().splitlines()]
+    assert adv[0]["schema_version"] == "coa-client-advancement-v1"
+    assert adv[0]["class"]["display"] == "Venomancer" and adv[0]["name"] == "Adrenal Venom"
+    assert adv[0]["coa_attribution"]["is_coa"] is True
+    assert adv[0]["raw"]["cols"]["0"] == 6086       # index-keyed audit map (JSON stringifies int keys)
+    assert (out / "coa_client_class_types.jsonl").is_file()
+    tabs = [json.loads(l) for l in (out / "coa_client_tab_types.jsonl").read_text().splitlines()]
+    assert tabs[0]["schema_version"] == "coa-client-tab-types-v1" and tabs[0]["name"] == "Class"
+    ess = [json.loads(l) for l in (out / "coa_client_essence.jsonl").read_text().splitlines()]
+    assert ess[0]["schema_version"] == "coa-client-essence-v1"      # raw progression, undecoded
 
 
 def test_main_fails_closed_without_stormlib(tmp_path, capsys):
