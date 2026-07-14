@@ -65,6 +65,7 @@ def attribute(nodes, class_types, skill_line_index=None) -> dict[int, SpellAttri
             memberships.append({
                 "mode": mode or "unknown", "class_type_id": n.class_type_id,
                 "class_internal": n.class_internal, "class_display": n.class_display,
+                "class_kind": n.class_kind,
                 "tab_type_id": n.tab_type_id, "tab_name": n.tab_name,
                 "node_id": n.node_id, "entry_type": n.entry_type,
             })

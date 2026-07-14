@@ -23,14 +23,18 @@ CoA client's MPQ→DBC spell family. Attribution is now filled by M1.14B from `C
   [DECISIONS.md](../DECISIONS.md) Decision 18-amended). The M1.14A placeholder
   `coa_attribution.status: "unknown"` is gone, replaced by:
   - `is_coa`: `true` iff any evidence contributes the `coa` mode
-  - `modes`: sorted list of every mode this spell participates in — `coa`, `reborn`, `stock`, and/or
-    `coa_system` (the `ConquestOfAzeroth` sentinel, marked non-playable). A spell can legitimately
-    carry more than one mode (e.g. reused across CoA and Reborn); that is multi-mode reuse, not an
-    unresolved conflict.
+  - `modes`: sorted list of every mode this spell participates in — exactly one or more of `coa`,
+    `reborn`, `stock` (three values, no others). A node whose class kind is the `ConquestOfAzeroth`
+    sentinel (class-type 35, kind `coa_system` — see
+    [client-class-types-schema.md](client-class-types-schema.md)) contributes mode `coa`; `coa_system`
+    is a class **kind**, never a member of `modes[]`. A spell can legitimately carry more than one mode
+    (e.g. reused across CoA and Reborn); that is multi-mode reuse, not an unresolved conflict.
   - `exclusive_mode`: the single mode when `len(modes) == 1`, else `null`
-  - `confidence`: `high` (advancement-registry membership, or the sentinel), `medium` (no advancement
-    row, but on a proven CoA skill line), or `low` (no advancement row, high-custom-ID only —
-    `is_coa: false`)
+  - `confidence`: `high` (advancement-registry membership, including the sentinel), `medium` (no
+    advancement row, but on a proven CoA skill line), or `low` (absent from both the advancement graph
+    and the proven CoA skill-line index — `is_coa: false`, regardless of `id_range`; a stock-ID orphan
+    gets the identical `low`/`is_coa: false` result, since `id_range` separates custom from stock, it
+    does not gate this branch)
   - `archive_family` and `id_range`: the M1.14A raw signals are **retained**, unchanged in meaning,
     as provenance-only fields alongside the new participation block (`archive_family` is known
     uninformative for CoA-vs-other partitioning; kept for audit, not decision-making)
@@ -38,7 +42,13 @@ CoA client's MPQ→DBC spell family. Attribution is now filled by M1.14B from `C
     stable list of `(class, tab)` contexts across every advancement node that realizes it — see
     [client-advancement-schema.md](client-advancement-schema.md) for the shared-spell `503748`
     example. Never a scalar `class`/`spec` field that flips to an array; a stock/classless membership
-    never overwrites a CoA one.
+    never overwrites a CoA one. Each membership dict carries `mode`, `class_type_id`,
+    `class_internal`, `class_display`, `class_kind`, `tab_type_id`, `tab_name`, `node_id`, and
+    `entry_type`. `class_kind` is the owning class's raw kind (`coa_class` | `coa_system` | `reborn` |
+    `stock` | `meta` | `unknown`, see [client-class-types-schema.md](client-class-types-schema.md)) —
+    it gives consumers the system-vs-playable distinction (e.g. the `ConquestOfAzeroth` sentinel,
+    `class_kind: "coa_system"`) without polluting `coa_attribution.modes[]`, which stays exactly
+    `coa | reborn | stock`.
   - **The alpha→display class rename (`Bloodmage`/`Felsworn`/`Templar`, see
     [client-class-types-schema.md](client-class-types-schema.md)) does not affect this record.** It is
     curated presentation metadata applied only to `class_display` inside `memberships[]`; the client's

@@ -193,7 +193,7 @@ explicit evidence truth table (no informal "corroboration raises confidence"):
 | CoA advancement membership (class-type 14–34) | `coa` | `high` |
 | Reborn advancement membership (class-type 36–46) | `reborn` | `high` |
 | Stock/classless advancement membership (class-type 2–12) | `stock` | `high` |
-| ConquestOfAzeroth sentinel (class-type 35) | `coa_system` (marked non-playable) | `high` |
+| ConquestOfAzeroth sentinel (class-type 35) | `coa` (sentinel; class kind stays `coa_system`, non-playable) | `high` |
 | No advancement row, but on a CoA skill line | `coa` | `medium` |
 | No advancement row, high custom ID only | (no mode) | `low`, `is_coa: false` |
 | Class-type outside known bands (possible new class / drift) | flagged, no mode asserted | flagged |

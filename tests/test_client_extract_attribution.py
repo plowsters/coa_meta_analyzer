@@ -83,3 +83,20 @@ def test_id_only_is_unknown_low():
     # callers treat absence as is_coa: false / low. Assert it is not present.
     res = attribute([], {}, skill_line_index={})
     assert 123456 not in res
+
+
+def test_coa_system_sentinel_contributes_coa_mode_not_a_new_mode():
+    # Owner ruling: the ConquestOfAzeroth sentinel (class-type 35, kind coa_system) is a class KIND,
+    # not a participation mode. It must contribute mode "coa" (never a "coa_system" mode), while the
+    # exact owner (class_type_id 35 / "ConquestOfAzeroth") is preserved in memberships[] via class_kind.
+    nodes = [_node(1, 700000, 35, "coa_system", "ConquestOfAzeroth")]
+    res = attribute(nodes, {})
+    a = res[700000].result
+    assert a.is_coa is True
+    assert a.modes == ("coa",)
+    assert a.exclusive_mode == "coa"
+    m = res[700000].memberships[0]
+    assert m["class_type_id"] == 35
+    assert m["class_internal"] == "ConquestOfAzeroth"
+    assert m["mode"] == "coa"
+    assert m["class_kind"] == "coa_system"
