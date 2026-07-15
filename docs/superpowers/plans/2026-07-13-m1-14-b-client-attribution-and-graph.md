@@ -56,7 +56,7 @@ Design spec: [M1.14B Client Attribution and CoA Advancement Graph](../specs/2026
 - `attribution.AttributionResult(is_coa:bool, modes:tuple[str,...], exclusive_mode:str|None, confidence:str)`
 - `attribution.attribute(nodes, class_types, skill_line_index=None) -> dict[int, SpellAttribution]` where `SpellAttribution` has `.result: AttributionResult` and `.memberships: list[dict]`.
 - `attribution.derive_coa_skill_lines(skill_line_ability_rows, coa_spell_ids) -> set[int]` (proven CoA skill-line set) and `attribution.build_skill_line_index(skill_line_ability_rows, coa_line_ids) -> dict[int,str]`
-- `parity.build_parity_report(nodes, builder_entries, *, class_types=None, low_confidence_fields=(), unresolved_layout_columns=(), expected_builder_records=None, provenance=None) -> dict` — computes ownership (entry_id↔node_id crosswalk), `identity_mismatches`, `per_class`/`per_tab` counts, `adjacency_mismatches`, and Decision-22 `legality_diffs` internally; carries `ownership_recall`/`ownership_precision`, the scoped `readiness` object, and a `blockers` diagnostic list (schema `coa-builder-parity-v2`).
+- `parity.build_parity_report(nodes, builder_entries, *, class_types=None, low_confidence_fields=(), unresolved_layout_columns=(), expected_builder_records=None, provenance=None) -> dict` — computes ownership (entry_id↔node_id crosswalk), `identity_mismatches`, `per_class`/`per_tab` counts, `adjacency_mismatches`, and Decision-22 `legality_diffs` internally; carries `ownership_recall`/`ownership_precision`, the scoped `readiness` object, and a `blockers` diagnostic list — the schema version this task originally emitted was later bumped and reworked; **superseded** by the shipped `coa-builder-parity-v3` — adds a `client_only_adjudication` param, adjudicated ownership, and canonicalized identity, see the Task 7 note below and `coa_client_extract/parity.py`.
 - `parity.flip_gate_inputs(layout) -> tuple[list[str], list[str]]` — `(low_confidence_fields, unresolved_layout_columns)` derived from a resolved `CharacterAdvancementLayout`; adjacency confidence is folded into these two lists.
 - `parity.EXPECTED_BUILDER_RECORDS = 3612` — pinned Builder artifact size; the CLI passes it as `expected_builder_records` to guard against a truncated oracle.
 
@@ -1804,6 +1804,21 @@ git commit -m "M1.14B: advancement/class-type/tab-type/raw-essence writers + fil
 
 ## Task 7: Node-level (node-id crosswalk) Builder-parity report
 
+> **Superseded (Task 11b, real-client acceptance).** This task's original signature and code below
+> reflect `parity.py` as first implemented. The real-client acceptance run forced two model
+> refinements, both shipped: ownership became **adjudicated** (a curated
+> `reports/client_extract/client_only_adjudication.json`, `--client-only-adjudication`, the new
+> `client_only_classification`/`builder_refresh_recommended` fields, generalizing Decision 22) rather
+> than exact-set equality, and identity gained **class-label canonicalization**
+> (`canonical_class_label`, `class_label_normalization: "nfkc-casefold-remove-whitespace-v1"`,
+> replacing flat `identity_mismatches`/`identity_mismatch_sample` with `raw_identity_mismatches`/
+> `hard_identity_mismatches`/`representation_differences`/`representation_difference_pairs`/
+> `hard_identity_mismatch_sample`). The schema bumped to `coa-builder-parity-v3`. See the shipped
+> `coa_client_extract/parity.py`, [client-advancement-schema.md](../../data/client-advancement-schema.md),
+> and [DECISIONS.md](../../DECISIONS.md) Decision 22 for the current, authoritative shape — this task's
+> body below is kept as the historical record of the original implementation step and is not updated
+> to match.
+
 **Files:**
 - Create: `coa_client_extract/parity.py`
 - Test: `tests/test_client_extract_parity.py`
@@ -2216,7 +2231,11 @@ def build_parity_report(nodes, builder_entries, *, class_types=None,
     blockers += [f"unresolved_layout_column:{c}" for c in unresolved_layout_columns]
 
     report = {
-        "schema_version": "coa-builder-parity-v2",
+        # NOTE: version bumped for doc consistency (Task 11b); the field names below this line
+        # (identity_mismatches, the client_only_ids blocking check, etc.) are this task's ORIGINAL
+        # shape and were themselves superseded — see the callout above "## Task 7" and the shipped
+        # coa_client_extract/parity.py for the current field set.
+        "schema_version": "coa-builder-parity-v3",
         "builder_records": len(builder_entries),
         "client_nodes": len(coa_nodes),
         "unique_spell_recall": round(len(client_spells & builder_spells) / len(builder_spells), 4)

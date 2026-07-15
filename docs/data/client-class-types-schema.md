@@ -59,6 +59,25 @@ Builder's own class naming plus explicit confirmation from the project owner tha
 classes revamped into existing classes (corroborated by spell theme: `SonOfArugal` = blood,
 `DemonHunter` = fel, `Monk` = holy).
 
+### Client-native CamelCase labels are a representation difference, not an alias
+
+Four playable classes ship with `display_source: client` (i.e. `display == internal`, no curation) in
+run-together CamelCase: `WitchDoctor`, `WitchHunter`, `KnightOfXoroth`, `SunCleric`. The Builder oracle
+spells these with a space (`Witch Doctor`, `Witch Hunter`, `Knight of Xoroth`, `Sun Cleric`). This is
+**not** a third case of curated renaming — the artifact never rewrites these labels; the client ships
+`WitchDoctor` as its `internal`/`display` unchanged. It is a pure-formatting **Decision-22
+`representation_difference`**, resolved only at parity-comparison time by the Builder-parity report's
+class-label canonicalizer (`canonical_class_label`, `class_label_normalization:
+"nfkc-casefold-remove-whitespace-v1"`, see [client-advancement-schema.md](client-advancement-schema.md)
+and [DECISIONS.md](../DECISIONS.md) Decision 22): `"".join(unicodedata.normalize("NFKC",
+v).split()).casefold()` makes `WitchDoctor` and `Witch Doctor` canonicalize equal. Across the 3,612
+matched advancement nodes this accounts for 708 raw class-label mismatches (`WitchDoctor`/
+`Witch Doctor` 159, `WitchHunter`/`Witch Hunter` 191, `KnightOfXoroth`/`Knight of Xoroth` 156,
+`SunCleric`/`Sun Cleric` 202), all normalized + accepted, zero of them a spell-ID divergence. Contrast
+the 3 curated *semantic* aliases above (`SonOfArugal → Bloodmage`, etc.): those really do change
+`display` in the shipped artifact because the client's raw name is a scrapped alpha class name, not a
+formatting variant of the current name.
+
 Example record:
 
 ```json
@@ -97,7 +116,7 @@ assert any column meaning.
 ### Readiness: this artifact is deliberately gated, and deliberately non-blocking
 
 Because `coa-client-essence-v1`'s per-level semantics are undecoded, the parity report
-(`coa-builder-parity-v2`) sets its `readiness.leveling_progression_ready` to `false`. Decoding this
+(`coa-builder-parity-v3`) sets its `readiness.leveling_progression_ready` to `false`. Decoding this
 table — and validating a build's AE/TE spend against per-level essence availability rather than only
 the max-level caps — is a **separate M1.15 sub-milestone** ("Level-by-level build validation"), its
 own gate (Decision 21/22). `leveling_progression_ready` **never blocks** any max-level readiness

@@ -262,14 +262,19 @@ are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpower
     `coa-client-spell-v1` / `coa-client-content-v1` artifacts, header-driven WDBC reader with
     schema-drift detection, auditable archive plan, and synthetic-fixture test tiers. Design:
     [M1.14A Client Extraction Core](superpowers/specs/2026-07-10-m1-14-a-client-extraction-core-design.md).
-  - **M1.14B Client Attribution and CoA Advancement Graph.** Status: code-complete (native StormLib
-    integration and local-client acceptance tests pending). Supersedes the
-    archive-family/ID-range attribution sketch in the umbrella: extracts `CharacterAdvancement.dbc`
-    (the client's own CoA advancement graph) as `coa-client-advancement-v1`, node-level Builder-parity
-    proven (100% unique-spell recall/attribution against the Builder oracle), plus
-    `coa-client-class-types-v1`/`coa-client-tab-types-v1`/`coa-client-essence-v1` and the filled
-    `coa_attribution` participation block on `coa-client-spell-v1`. Emits the node-level parity report
-    (`coa-builder-parity-v2`) with the scoped, per-field `readiness` object (Decision 21). Extracts and
+  - **M1.14B Client Attribution and CoA Advancement Graph.** Status: code-complete, real-client
+    verified. Supersedes the archive-family/ID-range attribution sketch in the umbrella:
+    `CharacterAdvancement.dbc` is a **unified all-class registry** (12,037 rows: stock 4,383, coa_class
+    3,614, meta 2,591, reborn 1,325, `None`/unknown 124); M1.14B extracts, validates, and Builder-parity
+    checks only the `coa_class` subgraph as `coa-client-advancement-v1` (node-level, 100%
+    unique-spell recall/attribution against the Builder oracle), while `attribute()` still runs over
+    the full node set, plus `coa-client-class-types-v1`/`coa-client-tab-types-v1`/
+    `coa-client-essence-v1` and the filled `coa_attribution` participation block on
+    `coa-client-spell-v1`. Emits the node-level parity report (`coa-builder-parity-v3`) with the
+    scoped, per-field `readiness` object (Decision 21) — ownership is no longer exact-set equality but
+    **adjudicated**: the client legitimately leads the Builder oracle on 2 CoA nodes, accepted via a
+    curated `client_only_classification` (Decision 22), and a class-label formatting difference (708
+    of 3,612 matched nodes) is canonicalized rather than treated as a hard mismatch. Extracts and
     proves the graph/legality; does not rewire the legality/tree pipeline to consume it — that's
     M1.15 (Decision 21/22). Schema docs:
     [client-advancement-schema.md](data/client-advancement-schema.md),
@@ -282,11 +287,13 @@ are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpower
 - **M1.15 Talent-Tree Correctness.** Status: planned. Full AE/TE essence spend to the target level;
   granular 10–60 level slider; consistent level-gating across all sections; mutually exclusive
   shared-node choices; leveling path never skips a level. **Per-field Builder supersession (Decision
-  21):** M1.15 consumes the M1.14B `coa-client-advancement-v1` graph and its `coa-builder-parity-v2`
+  21):** M1.15 consumes the M1.14B `coa-client-advancement-v1` graph and its `coa-builder-parity-v3`
   parity report — each `readiness.legality[field]` that reached `ready` may independently supersede
   the Builder for that field alone, while a field still `unresolved` keeps the Builder fallback until
   decoded; `full_builder_retirement_ready` is the roll-up that gates full Builder retirement, staying
-  false while any required attribution/ownership/adjacency/legality responsibility is unresolved.
+  false while any required attribution/ownership/adjacency/legality responsibility is unresolved —
+  `ownership_ready` itself already reads `true` on the real-client capture via the Decision-22
+  ownership adjudication, but that alone does not flip the roll-up.
   - **M1.15 sub-milestone: Level-by-level build validation.** Decode `CharacterAdvancementEssence`
     (extracted raw, undecoded semantics, as `coa-client-essence-v1` in M1.14B — see
     [client-class-types-schema.md](data/client-class-types-schema.md)) per-level progression — the

@@ -304,7 +304,7 @@ Reasoning:
   supersede the Builder; conversely, an undecoded field must not be silently promoted just because
   neighboring fields are ready.
 - Per-field staging keeps the migration honest and auditable: `readiness.legality[field]` (Decision 22)
-  and `full_builder_retirement_ready` in the parity report (`coa-builder-parity-v2`) expose exactly
+  and `full_builder_retirement_ready` in the parity report (`coa-builder-parity-v3`) expose exactly
   which responsibilities have flipped and which still fall back to the Builder.
 - Allowing the Builder to validate a decode it also proposed would be circular; requiring independent
   evidence (ranges, graph invariants, UI spot-checks) keeps the client the true source of the proof.
@@ -351,3 +351,77 @@ Reasoning:
 - Routing live corrections through a versioned, user-reported override layer (rather than falling back
   to the Builder) keeps the authority chain honest: the client is default-canonical offline, and only a
   reproducibly-verified live report — not another offline scrape — can override it.
+
+**Amended (M1.14B, 2026-07-14): generalized to OWNERSHIP — a client-only node adjudication, not just
+legality values.** The real-client acceptance run proved `ownership_recall == 1.0`/
+`unique_spell_recall == 1.0` (the Builder is fully covered, `builder_only_records == 0`) but found 2
+CoA nodes only the current client has: `18821` (new spell 674, Witch Doctor) and `34451` (an
+additional Guardian placement of existing spell 300534) — `raw_ownership_precision == 0.9994`. These
+are not defects; per this Decision the client is already the canonical current source, so a
+client-only node is adjudicated against the same four-way shape as the legality classes above,
+renamed for ownership and applied to node *existence* rather than field *value*: **extraction_defect**
+(↔ (a), blocks), **verified_client_current** (↔ (b), accepted — the client legitimately leads a stale
+oracle), **representation_difference** (↔ (c), normalize+accept), **unresolved** (↔ (d), the default
+for anything not curated — blocks). Classification is curated by hand in
+`reports/client_extract/client_only_adjudication.json` (schema `coa-client-only-adjudication-v1`;
+today it holds exactly the two records above, both `verified_client_current`), loaded by `regenerate`
+via `--client-only-adjudication` and consumed by `build_parity_report`'s `client_only_classification`
+(`{verified_client_current, representation_difference, extraction_defect, unresolved}`, each a list of
+`{node_id, spell_id, class, reason}`). `ownership_ready` is now:
+
+    ownership_ready = builder_only_records == 0
+                      AND hard_identity_mismatches == 0
+                      AND every client_only record classified verified_client_current | representation_difference
+                      AND taxonomy/count/non-empty guards
+
+Readiness comes from adjudication, never from recall alone — an unadjudicated client-only node still
+blocks, preserving the parity safety net, while a curated one no longer forces a stale oracle over an
+authoritative client. The raw counts stay visible regardless (`raw_ownership_precision`,
+`builder_coverage_recall`), and `builder_refresh_recommended: true` flags whenever any client-only node
+exists, signaling the Builder scrape should be refreshed against the current client.
+
+**Identity canonicalization (M1.14B, 2026-07-14).** The node-identity check (the anchored
+`(spell_id, class)` tuple, Decision 21) generalizes the same way: 708 of 3,612 matched nodes had a
+class-label difference that is pure formatting — client CamelCase vs Builder spaced (`WitchDoctor`/
+`Witch Doctor` 159, `WitchHunter`/`Witch Hunter` 191, `KnightOfXoroth`/`Knight of Xoroth` 156,
+`SunCleric`/`Sun Cleric` 202) — zero spell-ID divergence among them. The class label is canonicalized
+with a versioned, narrow, deterministic transform before the identity comparison:
+`canonical_class_label(v) = "".join(unicodedata.normalize("NFKC", v).split()).casefold()`, version
+string `class_label_normalization: "nfkc-casefold-remove-whitespace-v1"`. So `WitchDoctor` and
+`Witch Doctor` canonicalize equal — a `representation_difference` (class (c) above): normalized for
+comparison, accepted, and kept visible (`raw_identity_mismatches`, `representation_differences`,
+`representation_difference_pairs` as `{"Client → Builder": count}`). A semantic class change (e.g.
+`SunCleric` vs a hypothetical `Moon Cleric`) or any spell-ID divergence still canonicalizes unequal and
+is a **hard identity mismatch** (`hard_identity_mismatches`, sampled in `hard_identity_mismatch_sample`)
+that blocks ownership. This is distinct from, and narrower than, the 3 curated *semantic* aliases
+(Bloodmage/Felsworn/Templar — [client-class-types-schema.md](data/client-class-types-schema.md)): the
+canonicalizer only strips whitespace and case/Unicode-normalization form, never punctuation, and never
+fuzzy-matches. It is comparison-only — the client artifact always ships its own native label (e.g.
+`WitchDoctor`); only the Builder's spaced form is normalized for parity, never rewritten into the
+artifact.
+
+With both generalizations, `ownership_ready` can now be `true` on the real-client capture while
+`full_builder_retirement_ready` stays `false` — the roll-up (Decision 21) also requires
+`adjacency_ready` and every required `legality[field]` to reach `ready`, which remain gated on their
+own per-field decode-confidence proof and are unaffected by ownership/identity adjudication. The
+parity report schema is now `coa-builder-parity-v3` (was `-v2`): `client_only_classification`,
+`builder_refresh_recommended`, `raw_identity_mismatches`, `hard_identity_mismatches`,
+`representation_differences`, `class_label_normalization`, `representation_difference_pairs`, and
+`hard_identity_mismatch_sample` replace the old `identity_mismatches`/`identity_mismatch_sample`; the
+raw `builder_coverage_recall` and `raw_ownership_precision` fields are added alongside the retained
+`ownership_recall`/`ownership_precision` (never hidden or redefined).
+
+Reasoning (amendment):
+
+- A client-only node needs the same non-collapsing four-way treatment as a legality value difference:
+  an unexplained client-only node could be a genuine extraction defect (e.g. a mis-scoped join) just as
+  easily as the client legitimately outrunning a stale Builder scrape — collapsing both into "ownership
+  fails" would block a healthy client forever, while collapsing both into "ownership passes" would hide
+  a real defect.
+- Curation (a small human-reviewed JSON file) rather than an automatic heuristic is deliberate: telling
+  "new client content" apart from "extraction bug" is a judgment call that needs a reason recorded per
+  node, not a rule that could rubber-stamp a defect as `verified_client_current`.
+- Canonicalizing identity narrowly (NFKC + whitespace-strip + casefold only) keeps the safety net for
+  real drift intact: it absorbs exactly the CamelCase-vs-spaced formatting difference the current
+  client and Builder happen to use, while a semantic rename or spell-ID divergence — the cases that
+  actually matter — still hard-blocks, unlike a fuzzy-matching approach that could mask a real mismatch.
