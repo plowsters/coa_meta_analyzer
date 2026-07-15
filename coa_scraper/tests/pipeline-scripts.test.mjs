@@ -38,6 +38,7 @@ import {
 } from "../scripts/build-mechanics-artifacts.mjs";
 import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
 import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
+import { fieldCandidates } from "../scripts/lib/mechanics-candidates.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -797,4 +798,33 @@ test("applyDbIdentityGate excludes a name-mismatched db row (name_match ignored 
   const fresh = { name: "Adrenal Venom", name_match: false }; // builder-based name_match is audit-only
   assert.equal(applyDbIdentityGate({ dbRow: stale, referenceName: "Adrenal Venom" }).excluded, true);
   assert.equal(applyDbIdentityGate({ dbRow: fresh, referenceName: "Adrenal Venom" }).excluded, false);
+});
+
+test("fieldCandidates: client cast_time 0 is present (missing != zero), db excluded contributes nothing", () => {
+  const clientRec = {
+    mechanics: { cast_time_ms: 0, school_mask: 8, power_type: 3, duration_ms: null, range_max_yd: 30 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { confidence: "high" },
+    spell_id: 42,
+  };
+  const dbRow = { id: 42, cast_time_ms: 2000, name: "Stale" };
+  const cands = fieldCandidates({ field: "cast_time_ms", clientRec, builderNodes: [], dbRow, dbExcluded: true });
+  const client = cands.find((c) => c.source === "client_dbc");
+  assert.equal(client.normalized_value, 0);
+  assert.equal(client.eligible, true);
+  // db excluded → either absent or ineligible db_identity_mismatch
+  const db = cands.find((c) => c.source === "ascension_db");
+  assert(!db || db.eligible === false);
+});
+
+test("fieldCandidates: client cast_time ineligible when SpellCastTimes drifted", () => {
+  const clientRec = {
+    mechanics: { cast_time_ms: 1500 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "low", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { confidence: "high" }, spell_id: 7,
+  };
+  const cands = fieldCandidates({ field: "cast_time_ms", clientRec, builderNodes: [], dbRow: null, dbExcluded: false });
+  const client = cands.find((c) => c.source === "client_dbc");
+  assert.equal(client.eligible, false);
+  assert(client.eligibility_reasons.includes("client_table_drift"));
 });
