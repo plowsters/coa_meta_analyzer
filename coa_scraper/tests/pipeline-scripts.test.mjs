@@ -33,11 +33,11 @@ import { parseCaptureOptions } from "../scripts/lib/capture-options.mjs";
 import { validateNormalizedArtifacts } from "../scripts/validate-normalized.mjs";
 import { writeArtifactManifest } from "../scripts/write-artifact-manifest.mjs";
 import {
-  buildItemRows,
   buildMechanicsArtifact,
   buildMechanicsRows,
   summarizeMechanicsArtifacts
 } from "../scripts/build-mechanics-artifacts.mjs";
+import { buildItemRows } from "../scripts/build-item-artifacts.mjs";
 import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
 import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
 import { fieldCandidates } from "../scripts/lib/mechanics-candidates.mjs";

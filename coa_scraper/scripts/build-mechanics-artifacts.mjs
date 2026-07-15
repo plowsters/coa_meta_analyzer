@@ -4,15 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 
-import { readJsonl, writeJsonl } from "./lib/ascensiondb.mjs";
-import { writeJson } from "./lib/artifacts.mjs";
+import { readJsonl } from "./lib/ascensiondb.mjs";
 import { reconcileField, dbIdentityReference, applyDbIdentityGate, REASON } from "./lib/mechanics-reconcile.mjs";
 import { fieldCandidates } from "./lib/mechanics-candidates.mjs";
 import { isPresent } from "./lib/mechanics-normalize.mjs";
 import { loadAndValidateProjection, MechanicsBuildError } from "./lib/mechanics-projection.mjs";
 
 const MECHANICS_SCHEMA_VERSION = "coa-mechanics-v1";
-const ITEM_SCHEMA_VERSION = "coa-item-v1";
 
 const CLIENT_FIELDS = ["cast_time_ms", "duration_ms", "range_yards", "schools", "power_type"];
 const DB_ONLY_FIELDS = ["cooldown_ms", "gcd_ms", "costs"];
@@ -235,51 +233,6 @@ function recordConfidence(fp) {
   return anyClient ? "medium" : "low";
 }
 
-export function buildItemRows({ itemPayloadRows }) {
-  return itemPayloadRows
-    .filter(row => row.status === "matched")
-    .map(row => ({
-      schema_version: ITEM_SCHEMA_VERSION,
-      item_id: Number(row.item_id ?? row.id),
-      name: row.name || "",
-      icon: row.icon || "",
-      icon_asset_path: row.icon_asset_path || null,
-      quality: row.quality ?? null,
-      slot: row.inventory_type || inferItemSlot(row.tooltip_text),
-      item_class: row.item_class || inferItemClass(row.tooltip_text),
-      subclass: row.item_subclass || "",
-      weapon_type: row.weapon_type || inferWeaponType(row.tooltip_text),
-      armor_type: row.armor_type || inferArmorType(row.tooltip_text),
-      stats: statsObject(row.stats),
-      ratings: {},
-      speed: null,
-      min_damage: null,
-      max_damage: null,
-      spell_power: null,
-      attack_power: null,
-      required_level: row.required_level,
-      linked_spell_ids: row.linked_spell_ids || [],
-      linked_item_ids: row.linked_item_ids || [],
-      tooltip_text: row.tooltip_text || "",
-      source_urls: sourceUrls(row),
-      provenance: [
-        {
-          source: "ascension_db",
-          source_id: `item:${Number(row.item_id ?? row.id)}`,
-          source_url: sourceUrls(row)[0] || "",
-          parser: "build-mechanics-artifacts",
-          confidence: "medium",
-          notes: (row.warnings || []).map(warning => `db_warning:${warning}`)
-        }
-      ],
-      confidence: "medium",
-      raw: {
-        status: row.status,
-        fetched_at: row?.provenance?.fetched_at || null
-      }
-    }));
-}
-
 export function summarizeMechanicsArtifacts({ mechanicsRows, itemRows }) {
   const kinds = countBy(mechanicsRows, row => row.kind);
   const confidence = countBy(mechanicsRows, row => row.confidence);
@@ -382,32 +335,6 @@ function inferSchool(text) {
   return match ? match[1].toLowerCase() : "";
 }
 
-function inferItemSlot(text) {
-  const lower = String(text || "").toLowerCase();
-  if (lower.includes("boots")) return "feet";
-  if (lower.includes("gloves")) return "hands";
-  if (lower.includes("helm")) return "head";
-  if (lower.includes("chest")) return "chest";
-  return "";
-}
-
-function inferItemClass(text) {
-  const lower = String(text || "").toLowerCase();
-  if (/\baxe|sword|mace|dagger|staff|bow|gun|wand\b/.test(lower)) return "weapon";
-  if (/\bcloth|leather|mail|plate|boots|gloves|helm|chest\b/.test(lower)) return "armor";
-  return "";
-}
-
-function inferWeaponType(text) {
-  const match = String(text || "").match(/\b(axe|sword|mace|dagger|staff|bow|gun|wand)\b/i);
-  return match ? match[1].toLowerCase() : "";
-}
-
-function inferArmorType(text) {
-  const match = String(text || "").match(/\b(cloth|leather|mail|plate)\b/i);
-  return match ? match[1].toLowerCase() : "";
-}
-
 function costsObject(costs) {
   const output = {};
   for (const item of costs || []) {
@@ -420,19 +347,7 @@ function costsObject(costs) {
   return output;
 }
 
-function statsObject(stats) {
-  const output = {};
-  for (const item of stats || []) {
-    const stat = item?.stat ? String(item.stat) : "";
-    const value = Number(item?.value);
-    if (stat && Number.isFinite(value)) {
-      output[stat] = value;
-    }
-  }
-  return output;
-}
-
-function sourceUrls(row) {
+export function sourceUrls(row) {
   const urls = [
     row?.source_url,
     row?.provenance?.url,
@@ -441,7 +356,7 @@ function sourceUrls(row) {
   return [...new Set(urls)];
 }
 
-function numberOrNull(value) {
+export function numberOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -453,6 +368,8 @@ function countBy(rows, keyFn) {
     return acc;
   }, {});
 }
+
+function sha256File(p) { return crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex"); }
 
 function atomicWrite(targetPath, data) {
   const tmp = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
@@ -533,22 +450,35 @@ function isCliEntryPoint() {
 }
 
 if (isCliEntryPoint()) {
-  const entriesPath = process.argv[2] || "dist/coa_entries.enriched.jsonl";
-  const spellRowsPath = process.argv[3] || "dist/coa_db_spell_tooltips.jsonl";
-  const distDir = process.argv[4] || "dist";
-  const reportsDir = process.argv[5] || "reports";
-  const itemRowsPath = process.argv[6] || path.join(distDir, "coa_db_item_tooltips.jsonl");
+  const args = process.argv.slice(2);
+  const flag = (name, def) => {
+    const i = args.indexOf(name);
+    return i >= 0 && args[i + 1] ? args[i + 1] : def;
+  };
+  const has = (name) => args.includes(name);
+  const entriesPath = flag("--builder-entries", "dist/coa_entries.jsonl");
+  const dbPath = flag("--db-spells", "dist/coa_db_spell_tooltips.jsonl");
+  // npm runs scripts from coa_scraper/, but the extractor writes the projection to the REPO-ROOT
+  // reports/client_extract/ — so the default (and the npm scripts) reach it via ../reports/...
+  const projectionPath = flag("--projection", "../reports/client_extract/coa_client_spell_coa.jsonl");
+  const projManifestPath = flag("--projection-manifest", "../reports/client_extract/coa_client_spell_projection.manifest.json");
+  const outDir = flag("--out", "dist");
+  if (!fs.existsSync(entriesPath)) { console.error(`required builder entries missing: ${entriesPath}`); process.exit(2); }
   const entries = readJsonl(entriesPath);
-  const spellRows = readJsonl(spellRowsPath);
-  const itemPayloadRows = readJsonl(itemRowsPath);
-  const mechanicsRows = buildMechanicsRows({ entries, spellRows });
-  const itemRows = buildItemRows({ itemPayloadRows });
-  const summary = summarizeMechanicsArtifacts({ mechanicsRows, itemRows });
-
-  fs.mkdirSync(distDir, { recursive: true });
-  fs.mkdirSync(reportsDir, { recursive: true });
-  writeJsonl(path.join(distDir, "coa_mechanics.jsonl"), mechanicsRows);
-  writeJsonl(path.join(distDir, "coa_items.jsonl"), itemRows);
-  writeJson(path.join(reportsDir, "coa_mechanics_enrichment_summary.json"), summary);
-  console.log(JSON.stringify(summary, null, 2));
+  const spellRows = fs.existsSync(dbPath) ? readJsonl(dbPath) : [];
+  try {
+    const { canonical, manifest } = buildMechanicsArtifact({
+      entries, spellRows, projectionPath, manifestPath: projManifestPath, outDir,
+      allowFallback: has("--allow-fallback-mechanics"),
+      inputs: {
+        builder_entries: { path: entriesPath, sha256: sha256File(entriesPath) },
+        db_spell_tooltips: fs.existsSync(dbPath) ? { path: dbPath, sha256: sha256File(dbPath) } : null,
+        projection_path: projectionPath, projection_manifest_path: projManifestPath,
+      },
+    });
+    console.log(JSON.stringify({ canonical, record_count: manifest.outputs.record_count, coverage: manifest.coverage }, null, 2));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(2);
+  }
 }
