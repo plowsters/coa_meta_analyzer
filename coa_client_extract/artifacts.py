@@ -19,6 +19,13 @@ def _index_lookup(table: DbcTable | None, value_key: str) -> dict[int, int]:
     return {row["id"]: row[value_key] for row in table.rows}
 
 
+def _table_conf(table: DbcTable | None) -> str:
+    """A contributing side-table is 'high' only if present and drift-free; absent or drifted is 'low'."""
+    if table is None or table.drift:
+        return "low"
+    return "high"
+
+
 def build_client_spell_records(
     spell: DbcTable,
     cast_times: DbcTable | None,
@@ -57,6 +64,12 @@ def build_client_spell_records(
             "provenance": {
                 **provenance,
                 "schema_match_confidence": "low" if spell.drift else "high",
+                "schema_match_confidence_by_dbc": {
+                    "Spell": "low" if spell.drift else "high",
+                    "SpellCastTimes": _table_conf(cast_times),
+                    "SpellDuration": _table_conf(durations),
+                    "SpellRange": _table_conf(ranges),
+                },
             },
             "coa_attribution": {
                 "status": "unknown",  # M1.14A records raw signals; M1.14B decides
