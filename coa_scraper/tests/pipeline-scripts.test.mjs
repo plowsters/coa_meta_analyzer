@@ -36,6 +36,7 @@ import {
   buildMechanicsRows,
   summarizeMechanicsArtifacts
 } from "../scripts/build-mechanics-artifacts.mjs";
+import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -710,6 +711,14 @@ test("capture options support unattended headless mode", () => {
   assert.equal(options.waitMs, 250);
   assert.equal(options.headless, true);
   assert.equal(options.interactive, false);
+});
+
+test("normalizeSchoolMask flags unknown bits; normalizePowerType flags unknown enum", () => {
+  assert.deepEqual(normalizeSchoolMask(8), { schools: ["nature"], unknownBits: [] });
+  assert.deepEqual(normalizeSchoolMask(12), { schools: ["fire", "nature"], unknownBits: [] }); // 4|8
+  assert.deepEqual(normalizeSchoolMask(128), { schools: [], unknownBits: [128] });            // undocumented bit
+  assert.equal(normalizePowerType(3).value, "energy");
+  assert.equal(normalizePowerType(999).unknown, true);                                          // undocumented enum
 });
 
 test("M1.8 pipeline refreshes manifest after DB enrichment artifacts", () => {
