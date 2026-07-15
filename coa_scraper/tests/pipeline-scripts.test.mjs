@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -39,6 +40,7 @@ import {
 import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
 import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
 import { fieldCandidates } from "../scripts/lib/mechanics-candidates.mjs";
+import { loadAndValidateProjection, MechanicsBuildError } from "../scripts/lib/mechanics-projection.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -901,4 +903,163 @@ test("buildMechanicsRows: db-derived cooldown always leaves a db provenance entr
   assert.equal(rows[0].cooldown_ms, 30000);
   assert(rows[0].provenance.some((p) => p.source === "ascension_db")); // union includes db
   assert.equal(rows[0].field_provenance.cooldown_ms.selected_source, "ascension_db");
+});
+
+function writeProjectionFixture(dir, records) {
+  const proj = path.join(dir, "p.jsonl");
+  const man = path.join(dir, "p.manifest.json");
+  const body = records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : "");
+  fs.writeFileSync(proj, body);
+  const sha = crypto.createHash("sha256").update(body).digest("hex");
+  const uniq = new Set(records.map((r) => r.spell_id)).size;
+  fs.writeFileSync(man, JSON.stringify({
+    schema_version: "coa-client-spell-projection-v1",
+    projection: { path: "p.jsonl", sha256: sha, byte_length: Buffer.byteLength(body) },
+    counts: { projected_records: records.length, unique_spell_ids: uniq, source_records: records.length },
+  }));
+  return { proj, man };
+}
+
+function validProjRec(spell_id) {
+  return {
+    schema_version: "coa-client-spell-v1", spell_id, name: `S${spell_id}`,
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  };
+}
+
+test("loadAndValidateProjection: coverage gap fails", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "proj-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1, 2]) }),
+    /builder_missing_from_projection/,
+  );
+});
+
+test("loadAndValidateProjection: torn pair (only one file) throws even though it looks 'absent'", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "torn-"));
+  const { proj } = writeProjectionFixture(dir, [validProjRec(1)]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: path.join(dir, "missing.json"), builderSpellIds: new Set([1]) }),
+    /torn projection pair/,
+  );
+});
+
+test("loadAndValidateProjection: per-table drift on a populated field throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "drift-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.SpellCastTimes = "low"; // cast_time_ms is populated (0)
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /SpellCastTimes drift/,
+  );
+});
+
+test("loadAndValidateProjection: both files absent returns { absent: true }", () => {
+  const out = loadAndValidateProjection({ projectionPath: "/no/such.jsonl", manifestPath: "/no/such.json", builderSpellIds: new Set() });
+  assert.equal(out.absent, true);
+});
+
+test("loadAndValidateProjection: non-numeric cast_time_ms throws (no string leaks to canonical)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badnum-"));
+  const rec = validProjRec(1);
+  rec.mechanics.cast_time_ms = "2000"; // string, not number
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /cast_time_ms must be number\|null/,
+  );
+});
+
+test("loadAndValidateProjection: negative school_mask throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "negmask-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = -8;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /school_mask must be a non-negative integer/,
+  );
+});
+
+test("loadAndValidateProjection: fractional school_mask throws (bitmask must be integer)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fracmask-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = 8.5;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /school_mask must be integer\|null/,
+  );
+});
+
+test("loadAndValidateProjection: unknown school-mask bit throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badbit-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = 1 << 20; // no such school
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /unknown school-mask bits/,
+  );
+});
+
+test("loadAndValidateProjection: unknown power_type enum throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badpwr-"));
+  const rec = validProjRec(1);
+  rec.mechanics.power_type = 99;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /unknown power_type/,
+  );
+});
+
+test("loadAndValidateProjection: confidence value outside {high,low} throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badconf-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.SpellDuration = "medium";
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /must map .* to high\|low/,
+  );
+});
+
+test("loadAndValidateProjection: low Spell confidence throws (name + every field unreliable)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spelldrift-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.Spell = "low";
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /Spell table drift/,
+  );
+});
+
+test("loadAndValidateProjection: missing manifest.counts member throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nocounts-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  delete parsed.counts.unique_spell_ids;
+  fs.writeFileSync(man, JSON.stringify(parsed));
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /manifest.counts must have integer/,
+  );
+});
+
+test("loadAndValidateProjection: manifest byte_length disagreeing with the file throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badlen-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  parsed.projection.byte_length += 1; // still an integer, but wrong
+  fs.writeFileSync(man, JSON.stringify(parsed));
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /byte_length mismatch/,
+  );
 });
