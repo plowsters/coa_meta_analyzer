@@ -828,3 +828,77 @@ test("fieldCandidates: client cast_time ineligible when SpellCastTimes drifted",
   assert.equal(client.eligible, false);
   assert(client.eligibility_reasons.includes("client_table_drift"));
 });
+
+test("buildMechanicsRows: one row per spell_id, client field wins, schools + field_provenance present", () => {
+  const projection = [{
+    spell_id: 92117, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entryA = { spell_id: 92117, entry_id: 501, entry_type: "Ability", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const entryB = { spell_id: 92117, entry_id: 777, entry_type: "Talent", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const dbRow = { id: 92117, name: "Adrenal Venom", name_match: true, cast_time_ms: 2000, cooldown_ms: 30000, gcd_ms: 1500, tooltip_text: "Deals Nature damage." };
+  const rows = buildMechanicsRows({ entries: [entryA, entryB], spellRows: [dbRow], projection });
+  assert.equal(rows.length, 1);
+  const r = rows[0];
+  assert.equal(r.spell_id, 92117);
+  assert.deepEqual(r.source_node_ids, [501, 777]);
+  assert.equal(r.cast_time_ms, 0); // client 0 beats db 2000 (missing != zero)
+  assert.deepEqual(r.schools, ["nature"]);
+  assert.equal(r.cooldown_ms, 30000); // db-only field survives (identity matched)
+  assert.equal(r.field_provenance.cast_time_ms.selected_source, "client_dbc");
+  assert.equal(r.field_provenance.effects.selected_source, "inferred"); // effects field has provenance
+  assert.deepEqual(r.raw.tags, ["damage"]); // builder tags carried under raw, not a top-level v1 field
+  assert.equal(r.tags, undefined); // NOT a top-level field (would be dropped by the v1 loader)
+  // the identity-matched db tooltip participated in classifying kind → recorded as a db candidate
+  assert(r.field_provenance.kind.candidates.some((c) => c.source === "ascension_db" && c.source_field === "tooltip_text"));
+});
+
+test("buildMechanicsRows: identity-mismatched db row supplies zero fields", () => {
+  const projection = [{
+    spell_id: 5, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 1500, duration_ms: null, range_min_yd: null, range_max_yd: null, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entry = { spell_id: 5, entry_id: 9, entry_type: "Ability", name: "Adrenal Venom", damage_schools: [], resources: [] };
+  const staleDb = { id: 5, name: "Fang Venom: Lifeblood", name_match: false, cooldown_ms: 999, gcd_ms: 1500 };
+  const rows = buildMechanicsRows({ entries: [entry], spellRows: [staleDb], projection });
+  assert.equal(rows[0].cooldown_ms ?? null, null); // db excluded → no cooldown leaks
+  // and the excluded db cooldown candidate is recorded as ineligible (audit retained)
+  assert.equal(rows[0].field_provenance.cooldown_ms.candidates[0].eligible, false);
+  // the excluded db row must not leak into kind classification either (no db tooltip candidate)
+  assert(!rows[0].field_provenance.kind.candidates.some((c) => c.source === "ascension_db"));
+  assert(!rows[0].provenance.some((p) => p.source === "ascension_db")); // nothing db survives
+});
+
+test("buildMechanicsRows: output is input-node-order-independent (canonicalized by entry_id)", () => {
+  const projection = [{
+    spell_id: 92117, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const a = { spell_id: 92117, entry_id: 501, entry_type: "Ability", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const b = { spell_id: 92117, entry_id: 777, entry_type: "Talent", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["dot"] };
+  const forward = buildMechanicsRows({ entries: [a, b], spellRows: [], projection });
+  const reversed = buildMechanicsRows({ entries: [b, a], spellRows: [], projection });
+  assert.equal(JSON.stringify(forward), JSON.stringify(reversed));
+  assert.deepEqual(forward[0].raw.tags, ["damage", "dot"]); // set-like union, sorted, under raw
+});
+
+test("buildMechanicsRows: db-derived cooldown always leaves a db provenance entry", () => {
+  const projection = [{
+    spell_id: 9, name: "X",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: null, range_min_yd: null, range_max_yd: null, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entry = { spell_id: 9, entry_id: 1, entry_type: "Ability", name: "X", damage_schools: [], resources: [] };
+  const dbRow = { id: 9, name: "X", name_match: true, cooldown_ms: 30000 };
+  const rows = buildMechanicsRows({ entries: [entry], spellRows: [dbRow], projection });
+  assert.equal(rows[0].cooldown_ms, 30000);
+  assert(rows[0].provenance.some((p) => p.source === "ascension_db")); // union includes db
+  assert.equal(rows[0].field_provenance.cooldown_ms.selected_source, "ascension_db");
+});
