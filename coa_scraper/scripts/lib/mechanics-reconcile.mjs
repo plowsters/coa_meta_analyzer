@@ -1,4 +1,5 @@
 import { isPresent } from "./mechanics-normalize.mjs";
+import { normalizeName } from "./ascensiondb.mjs";
 
 export const TIERS = Object.freeze(["client_dbc", "verified_builder", "ascension_db", "inferred"]);
 
@@ -78,4 +79,26 @@ export function reconcileField({ field, candidates }) {
     ? REASON.OMITTED_UNRESOLVED_CONFLICT
     : REASON.OMITTED_NO_ELIGIBLE_CANDIDATE;
   return { field, selected: undefined, provenance, hadConflict: anyConflict };
+}
+
+// Identity reference: client name → consensus verified-Builder name → db name.
+export function dbIdentityReference({ clientName, builderNames, dbName }) {
+  if (clientName) return clientName;
+  const names = (builderNames || []).filter(Boolean).map(String);
+  if (names.length) {
+    const first = names[0];
+    if (names.every((n) => normalizeName(n) === normalizeName(first))) return first;
+  }
+  return dbName || null;
+}
+
+// A db row is excluded from every contribution when its normalized name != the reference.
+// The existing Builder-based name_match is NOT consulted as a veto (audit-only). A row that cannot
+// be identity-checked (no db name, or no reference to check against) is excluded as UNVERIFIABLE,
+// never silently allowed.
+export function applyDbIdentityGate({ dbRow, referenceName }) {
+  if (!dbRow) return { excluded: false, reason: null };
+  if (!dbRow.name || !referenceName) return { excluded: true, reason: REASON.DB_IDENTITY_UNVERIFIABLE };
+  const mismatch = normalizeName(dbRow.name) !== normalizeName(referenceName);
+  return { excluded: mismatch, reason: mismatch ? REASON.DB_IDENTITY_MISMATCH : null };
 }

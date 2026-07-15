@@ -37,7 +37,7 @@ import {
   summarizeMechanicsArtifacts
 } from "../scripts/build-mechanics-artifacts.mjs";
 import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
-import { reconcileField, REASON } from "../scripts/lib/mechanics-reconcile.mjs";
+import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -784,4 +784,17 @@ test("reconcileField omits field when only tier conflicts", () => {
   const out = reconcileField({ field: "schools", candidates: [b(1, ["nature"]), b(2, ["shadow"])] });
   assert.equal(out.selected, undefined);
   assert.equal(out.provenance.selection_reason, REASON.OMITTED_UNRESOLVED_CONFLICT);
+});
+
+test("dbIdentityReference prefers client name, then consensus builder, then db", () => {
+  assert.equal(dbIdentityReference({ clientName: "Adrenal Venom", builderNames: ["X"], dbName: "Y" }), "Adrenal Venom");
+  assert.equal(dbIdentityReference({ clientName: "", builderNames: ["Ward", "Ward"], dbName: "Y" }), "Ward");
+  assert.equal(dbIdentityReference({ clientName: "", builderNames: ["A", "B"], dbName: "Y" }), "Y");
+});
+
+test("applyDbIdentityGate excludes a name-mismatched db row (name_match ignored as veto)", () => {
+  const stale = { name: "Fang Venom: Lifeblood", name_match: false };
+  const fresh = { name: "Adrenal Venom", name_match: false }; // builder-based name_match is audit-only
+  assert.equal(applyDbIdentityGate({ dbRow: stale, referenceName: "Adrenal Venom" }).excluded, true);
+  assert.equal(applyDbIdentityGate({ dbRow: fresh, referenceName: "Adrenal Venom" }).excluded, false);
 });
