@@ -53,7 +53,7 @@ Effects use `effect_type` values such as:
 - `stat_modify`
 - `trigger_spell`
 
-Effects may include `school`, `target`, `amount`, `aura`, `stat`, `trigger_spell_id`, `duration_ms`, `tick_interval_ms`, `scaling`, `tags`, and raw source data.
+Effects may include `school`, `target`, `amount`, `aura`, `stat`, `trigger_spell_id`, `duration_ms`, `tick_interval_ms`, `scaling`, `tags`, and raw source data. `tick_interval_ms` is the canonical field name emitted by the builder; the `coa_meta/mechanics.py` loader also accepts a legacy `period_ms` key on input for backward compatibility, but always **reserializes** it as `tick_interval_ms` — `period_ms` never survives a round-trip.
 
 ## Provenance
 
