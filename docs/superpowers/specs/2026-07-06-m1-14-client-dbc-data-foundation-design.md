@@ -262,16 +262,26 @@ the client is current. This uses the changelog as a verification signal, not a p
 Extract and normalize the GameTables and base rules into a single `coa-wow-constants-v1` JSON snapshot
 (paired with a binding manifest written last), plus a thin `coa_meta` reader (lookup + schema-version
 rejection + provenance preservation — **no** formula/engine, which is M1.16). See the dedicated
-[M1.14D design](2026-07-14-m1-14-d-wow-constants-design.md) for the full contract; in brief:
+[M1.14D design](2026-07-17-m1-14-d-wow-constants-design.md) for the full contract; in brief:
 
 - **Rating→% is a two-table computation**, `gtOCTClassCombatRatingScalar->ratio /
   gtCombatRatings->ratio` (the stock 3.3.5a `GetRatingMultiplier` form), so
   `gtOCTClassCombatRatingScalar` is a **required** input, not optional.
-- Crit tables (`gtChanceToMeleeCrit(Base)`, `gtChanceToSpellCrit(Base)`), mana-regen tables
-  (`gtRegenMPPerSpt`, `gtOCTRegenMP`), base HP/MP (`gtOCTBaseHP/MPByClass`), and `ChrClasses`. NPC-only
-  tables (e.g. `gtNPCManaCostScaler`) are excluded. HP-regen pair inclusion is scoped in the D spec.
-- A **reconnaissance step** extracts the real Ascension gt headers/IDs/record-counts/value-domains and
-  proves the axis mapping (rating/level/class) by validated ID + dimensions, never blind row order.
+- **The GameTable class axis is the stock `ChrClasses` namespace** (`1–9`, `11`; hole at `10`), *not*
+  the CoA class-type namespace (14–34), so class-indexed tables (scalar/crit/regen/base-pool) are
+  **bridge-gated** for CoA classes: canonical extraction still succeeds in the native `wow_class_id`
+  namespace, but the manifest carries `m1_16_class_indexed_ready` and the reader fails closed on a CoA
+  class-indexed lookup until a CoA→`wow_class_id` bridge is proven (an M1.16 entry condition, never
+  inferred from power type). `gtCombatRatings` per-level lookups are bridge-free.
+- Proven-required: the crit tables (`gtChanceToMeleeCrit(Base)`, `gtChanceToSpellCrit(Base)`),
+  `gtRegenMPPerSpt` (the stock mana-regen operand), and `ChrClasses`. `gtOCTRegenMP` and base HP/MP
+  (`gtOCTBaseHP/MPByClass`) are **recon-gated candidates** (semantics unproven — the reference servers
+  leave `gtOCTRegenMP` unused), not required halves. NPC-only tables (`gtNPCManaCostScaler`) are
+  excluded; the HP-regen pair is deferred with an M1.16 entry condition.
+- A **reconnaissance step** resolves the real Ascension gt headers/physical-form/IDs/record-counts/
+  value-domains and validates axis meaning against a **pinned reference indexing contract** (explicit
+  keys + coverage + holes/padding + sampled anchors) — never record count alone. `wdbc.py` gains a
+  float ordinal-preserving read path (the positional reader is `uint32`-only).
 - Documented rules not in DBC (base energy 100, GCD floor, etc.) are **verification-labelled** — each
   carries `authority` (e.g. `wotlk_reference`) + `ascension_verification` + applicability scope, so a
   stock assumption (e.g. energy = flat 10/sec, no haste; focus is a separate path) is never presented
@@ -283,14 +293,17 @@ Ascension may deviate, so the M1.16 engine consumes inputs with stated assumptio
 ### Mechanics extraction completion (M1.14E)
 
 Extend `coa_client_extract` to the per-spell mechanical DBC tables that M1.14A/C deliberately left on
-the db/inferred tiers — `SpellCooldowns` (and category cooldowns), `SpellRuneCost`, and the
-`SpellEffect` `effects[]` join (coefficients, costs, charges) — and reconcile them into
-`coa-mechanics-v1` through the M1.14C per-field precedence engine (`client_dbc` ▸ verified Builder ▸
-AscensionDB ▸ inferred), extending the projection and reconciler rather than replacing them. This
-closes the ownership gap the constants work surfaced: without it, M1.16 would have D's rating/regen
-conversions but no dependable client-sourced operands (per-cast coefficients, cooldowns, costs,
-charges) to feed them. Depends on A (extraction machinery) and C (reconciliation engine); independent
-of D. It is producer-side only — no consumer rewire (that stays M1.16, with the M1.14C deferral).
+the db/inferred tiers — `SpellCooldowns` (and category cooldowns), `SpellRuneCost`, the
+`SpellEffect` `effects[]` join (coefficients, costs, charges), and the **per-spell GCD operands** the
+M1.14D constants work explicitly deferred here (`StartRecoveryTime`/`StartRecoveryCategory`,
+`damage_class`, and the GCD-relevant attribute bits) — and reconcile them into `coa-mechanics-v1`
+through the M1.14C per-field precedence engine (`client_dbc` ▸ verified Builder ▸ AscensionDB ▸
+inferred), extending the projection and reconciler rather than replacing them. This closes the
+ownership gap the constants work surfaced: without it, M1.16 would have D's rating/regen conversions
+plus a GCD floor/ceiling but no dependable client-sourced operands (per-cast coefficients, cooldowns,
+costs, charges, per-spell base GCD) to feed them. Depends on A (extraction machinery) and C
+(reconciliation engine); independent of D. It is producer-side only — no consumer rewire (that stays
+M1.16, with the M1.14C deferral).
 
 ### Test-suite integrity audit (M1.14F)
 

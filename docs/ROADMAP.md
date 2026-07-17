@@ -305,12 +305,13 @@ are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpower
     gets its own spec when next in line.
   - **M1.14E Mechanics Extraction Completion (deferred spell schema).** Extend client extraction to the
     per-spell mechanical tables M1.14A/C deliberately deferred — `SpellCooldowns`/category cooldowns,
-    `SpellRuneCost`, and the `SpellEffect` `effects[]` join (coefficients, costs, charges) — which today
-    still resolve from the stale db/inferred tiers, and reconcile them into `coa-mechanics-v1` through
-    the M1.14C per-field precedence engine. This closes the ownership gap where M1.16 would otherwise
-    have D's conversion constants but no dependable client-sourced per-spell operands. Depends on A
-    (extraction machinery) and C (reconciliation engine); independent of D. Delineated in the umbrella;
-    gets its own spec when next in line.
+    `SpellRuneCost`, the `SpellEffect` `effects[]` join (coefficients, costs, charges), and the per-spell
+    GCD operands M1.14D pushes here (`StartRecoveryTime`/`StartRecoveryCategory`, `damage_class`, GCD
+    attribute bits) — which today still resolve from the stale db/inferred tiers, and reconcile them into
+    `coa-mechanics-v1` through the M1.14C per-field precedence engine. This closes the ownership gap where
+    M1.16 would otherwise have D's conversion constants and a GCD floor/ceiling but no dependable
+    client-sourced per-spell operands. Depends on A (extraction machinery) and C (reconciliation engine);
+    independent of D. Delineated in the umbrella; gets its own spec when next in line.
   - **M1.14F carried-forward audit item (from M1.14B, M1 follow-up).** The `coa-builder-parity-v3`
     `per_class`/`per_tab` breakdown tables group on raw, un-canonicalized class labels, so the four
     CamelCase CoA classes (`WitchDoctor`, `WitchHunter`, `KnightOfXoroth`, `SunCleric`) surface
