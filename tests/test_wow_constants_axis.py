@@ -31,9 +31,13 @@ def test_rating_by_level_drops_padding():
 
 
 def test_class_rating_scalar_plus_one_offset_and_sparse_roster():
+    # The frozen real-client policy declares gtOCTClassCombatRatingScalar as explicit_id (id@0,
+    # value@1); build the fixture to match, with value == id so the +1-offset index is asserted.
     layouts, ls, rs = _policy()
-    table = parse_gametable(_implicit([float(i) for i in range(12 * 32)]),
-                            physical_form="implicit_row", expected_field_count=1, expected_record_size=4)
+    assert layouts["class_combat_rating_scalar"].key_source == "explicit_id"
+    table = parse_gametable(_explicit([(k, float(k)) for k in range(12 * 32)]),
+                            physical_form="explicit_id", expected_field_count=2, expected_record_size=8,
+                            value_cell=1, id_cell=0)
     entries, _ = map_table_entries(layouts["class_combat_rating_scalar"], table, class_roster=[1, 2, 11],
                                    level_stride=ls, rating_stride=rs)
     assert next(e for e in entries if e["wow_class_id"] == 1 and e["rating_id"] == 6)["value"] == 7.0

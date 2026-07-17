@@ -23,6 +23,11 @@ def _implicit(values):
         struct.pack("<f", v) for v in values)
 
 
+def _scalar(n=12 * 32):  # explicit_id (id, value) form — matches the real gtOCTClassCombatRatingScalar
+    body = b"".join(struct.pack("<If", k, 1.0) for k in range(n))
+    return struct.pack("<4sIIII", b"WDBC", n, 2, 8, 0) + body
+
+
 def _chr_classes(pairs):
     strings = b"\x00" + b"".join(f"C{i}".encode() + b"\x00" for i, _ in pairs)
     rows, off = [], 1
@@ -38,7 +43,7 @@ def make_backend(**overrides):
     ids = [(i, 0) for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 11]]
     e = {
         "DBFilesClient\\gtCombatRatings.dbc": [(Path("patch-M.MPQ"), _implicit([float(i) for i in range(3200)]))],
-        "DBFilesClient\\gtOCTClassCombatRatingScalar.dbc": [(Path("patch-M.MPQ"), _implicit([1.0] * (12 * 32)))],
+        "DBFilesClient\\gtOCTClassCombatRatingScalar.dbc": [(Path("patch-M.MPQ"), _scalar())],
         "DBFilesClient\\gtChanceToMeleeCrit.dbc": [(Path("patch-M.MPQ"), _implicit([0.05] * (12 * 100)))],
         "DBFilesClient\\gtChanceToMeleeCritBase.dbc": [(Path("patch-M.MPQ"), _implicit([0.01] * 12))],
         "DBFilesClient\\gtChanceToSpellCrit.dbc": [(Path("patch-M.MPQ"), _implicit([0.05] * (12 * 100)))],

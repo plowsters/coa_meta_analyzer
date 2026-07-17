@@ -1,0 +1,12 @@
+{
+  "schema": "wow-class-axis-adjudication-v1",
+  "version": "wow-class-axis-adjudication-v1",
+  "accepted_comparison": "extended",
+  "reference_expected_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 11],
+  "reference_holes": [10],
+  "observed_client_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+                          21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+  "rationale": "The real Ascension client ChrClasses.dbc carries 32 classes in the stock wow_class_id namespace (a superset of stock WotLK 1-9,11): it fills the stock class-10 hole and adds custom classes 12-32. GameTable class-indexed data (scalar/crit/regen) exists for all 32. This is a legitimate Ascension extension, recorded and accepted per Decision 22's representation-difference model, NOT an extraction defect. Class context (which wow_class_id a CoA class-type actor uses) remains M1.16's composite check; class_context_resolution stays 'unproven'.",
+  "reviewer": "M1.14D Task 7 recon adjudication",
+  "date": "2026-07-17"
+}

@@ -12,6 +12,8 @@
       "supported": {"rating_id": {"min": 0, "max": 24}, "level": {"min": 1, "max": 100}}},
     "class_combat_rating_scalar": {"source_dbc": "gtOCTClassCombatRatingScalar",
       "index_kind": "class_rating_scalar", "index_offset": 1,
+      "physical_form": "explicit_id", "key_source": "explicit_id",
+      "expected_field_count": 2, "expected_record_size": 8, "value_cell": 1, "id_cell": 0,
       "axes": ["wow_class_id", "rating_id"], "class_indexed": true,
       "supported": {"rating_id": {"min": 0, "max": 24}}},
     "melee_crit_per_agi": {"source_dbc": "gtChanceToMeleeCrit", "index_kind": "class_by_level",
