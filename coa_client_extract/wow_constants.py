@@ -100,3 +100,36 @@ def map_table_entries(layout: GameTableLayout, table: GameTable, *, class_roster
     counts = {"source_records": table.record_count, "emitted_entries": len(entries),
               "padding_records": table.record_count - len(entries)}
     return entries, counts
+
+
+def build_class_axis(chr_rows: list[dict], *, reference_expected_ids: list[int],
+                     reference_holes: list[int], power_type_enum: dict) -> dict:
+    ids = [int(r["id"]) for r in chr_rows]
+    if len(ids) != len(set(ids)):
+        raise ValueError("duplicate ChrClasses ids")
+    power_map = power_type_enum.get("map", {})
+    default_power: dict[str, str] = {}
+    for r in chr_rows:
+        pt = str(int(r["power_type"]))
+        if pt not in power_map:
+            raise ValueError(f"class {r['id']}: unmapped power_type {pt}")
+        default_power[str(int(r["id"]))] = power_map[pt]
+
+    observed = sorted(ids)
+    ref = sorted(reference_expected_ids)
+    ref_set, obs_set = set(ref), set(observed)
+    if obs_set == ref_set:
+        comparison = "exact"
+    elif obs_set > ref_set:
+        comparison = "extended"
+    elif obs_set < ref_set:
+        comparison = "changed"
+    else:
+        comparison = "ambiguous"
+    return {"namespace": "chr_classes", "reference_expected_ids": ref,
+            "reference_holes": sorted(reference_holes), "observed_client_ids": observed,
+            "comparison": comparison, "default_power_type_by_wow_class_id": default_power}
+
+
+def class_roster(class_axis: dict) -> list[int]:
+    return list(class_axis["observed_client_ids"])
