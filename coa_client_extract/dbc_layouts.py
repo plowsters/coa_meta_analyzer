@@ -118,3 +118,30 @@ class CharacterAdvancementLayout:
 # their proven confidence. The anchors themselves (node_id/spell_id/class_type) are structurally
 # verified, but legality fields stay unproven until decode fills `confidence`.
 CHARACTER_ADVANCEMENT = CharacterAdvancementLayout()
+
+
+@dataclass(frozen=True)
+class GameTableLayout:
+    key: str
+    source_dbc: str
+    physical_form: str          # "implicit_row" | "explicit_id"
+    key_source: str             # "ordinal" | "explicit_id"
+    expected_field_count: int
+    expected_record_size: int
+    value_cell: int
+    id_cell: int | None
+    index_kind: str             # rating_by_level | class_rating_scalar | class_by_level | class_only
+    axes: tuple[str, ...]
+    class_indexed: bool
+    supported: dict
+    index_offset: int = 0
+    semantics: str = "proven"
+
+
+# ChrClasses is a normal named DBC, NOT a GameTable. Pinned 3.3.5a columns: ClassID @0,
+# powerType @2, first localized (enUS) name @5.
+CHR_CLASSES = DbcLayout(
+    name="ChrClasses", expected_field_count=60, expected_record_size=60 * 4,
+    columns={"id": FieldSpec(0, "uint32"), "power_type": FieldSpec(2, "int32"),
+             "name": FieldSpec(5, "str")},
+)
