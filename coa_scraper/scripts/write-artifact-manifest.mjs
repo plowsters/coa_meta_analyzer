@@ -23,6 +23,7 @@ const scriptPaths = [
   "scripts/apply-db-enrichment.mjs",
   "scripts/enrich-linked-items.mjs",
   "scripts/build-mechanics-artifacts.mjs",
+  "scripts/build-item-artifacts.mjs",
   "scripts/write-source-level-report.mjs",
   "scripts/validate-normalized.mjs",
   "scripts/write-artifact-manifest.mjs",
@@ -48,7 +49,6 @@ const artifactPaths = [
   "reports/coa_item_enrichment_summary.json",
   "reports/coa_ascensiondb_cache_manifest.json",
   "reports/coa_ascensiondb_cache_summary.json",
-  "reports/coa_mechanics_enrichment_summary.json",
   "dist/coa_entries.jsonl",
   "dist/coa_entries.pretty.json",
   "dist/coa_classes.json",
@@ -62,6 +62,8 @@ const artifactPaths = [
   "dist/coa_db_asset_records.jsonl",
   "dist/coa_entries.enriched.jsonl",
   "dist/coa_mechanics.jsonl",
+  "dist/coa_mechanics.manifest.json",
+  "dist/coa_mechanics.fallback.manifest.json",
   "dist/coa_items.jsonl"
 ];
 

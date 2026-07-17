@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -32,10 +33,15 @@ import { parseCaptureOptions } from "../scripts/lib/capture-options.mjs";
 import { validateNormalizedArtifacts } from "../scripts/validate-normalized.mjs";
 import { writeArtifactManifest } from "../scripts/write-artifact-manifest.mjs";
 import {
-  buildItemRows,
+  buildMechanicsArtifact,
   buildMechanicsRows,
   summarizeMechanicsArtifacts
 } from "../scripts/build-mechanics-artifacts.mjs";
+import { buildItemRows } from "../scripts/build-item-artifacts.mjs";
+import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanics-normalize.mjs";
+import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
+import { fieldCandidates } from "../scripts/lib/mechanics-candidates.mjs";
+import { loadAndValidateProjection, MechanicsBuildError } from "../scripts/lib/mechanics-projection.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -597,6 +603,7 @@ test("mechanics artifact builder emits spell mechanics and linked item rows", ()
   const spellRow = enrichedSpellRow({
     id: 92117,
     entry_id: 501,
+    name: "Dream Flowers",
     tooltip_text: "Deals 120 Nature damage over 12 sec.",
     cooldown_ms: 30000,
     gcd_ms: 1500,
@@ -634,9 +641,9 @@ test("mechanics artifact builder emits spell mechanics and linked item rows", ()
   assert.equal(mechanicsRows[0].cast_time_ms, 0);
   assert.equal(mechanicsRows[0].range_yards, 30);
   assert.equal(mechanicsRows[0].effects[0].duration_ms, 12000);
-  assert.equal(mechanicsRows[0].effects[0].period_ms, 3000);
+  assert.equal(mechanicsRows[0].effects[0].tick_interval_ms, 3000);
   assert(mechanicsRows[0].raw.linked_item_ids.includes(23887));
-  assert.equal(mechanicsRows[0].provenance[0].source, "ascension_db");
+  assert(mechanicsRows[0].provenance.some((p) => p.source === "ascension_db"));
   assert.equal(itemRows[0].schema_version, "coa-item-v1");
   assert.equal(itemRows[0].item_id, 23887);
   assert.equal(itemRows[0].required_level, 58);
@@ -712,6 +719,14 @@ test("capture options support unattended headless mode", () => {
   assert.equal(options.interactive, false);
 });
 
+test("normalizeSchoolMask flags unknown bits; normalizePowerType flags unknown enum", () => {
+  assert.deepEqual(normalizeSchoolMask(8), { schools: ["nature"], unknownBits: [] });
+  assert.deepEqual(normalizeSchoolMask(12), { schools: ["fire", "nature"], unknownBits: [] }); // 4|8
+  assert.deepEqual(normalizeSchoolMask(128), { schools: [], unknownBits: [128] });            // undocumented bit
+  assert.equal(normalizePowerType(3).value, "energy");
+  assert.equal(normalizePowerType(999).unknown, true);                                          // undocumented enum
+});
+
 test("M1.8 pipeline refreshes manifest after DB enrichment artifacts", () => {
   const packageJson = JSON.parse(
     fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")
@@ -722,4 +737,441 @@ test("M1.8 pipeline refreshes manifest after DB enrichment artifacts", () => {
   assert.match(packageJson.scripts["pipeline:m1.8"], /write-artifact-manifest/);
   assert.match(packageJson.scripts["build-mechanics"], /build-mechanics-artifacts/);
   assert.match(packageJson.scripts["pipeline:m1.9"], /build-mechanics/);
+});
+
+test("reconcileField picks first eligible by tier and records all candidates", () => {
+  const cand = (over) => ({
+    source: "x", precedence_tier: "inferred", source_id: "s", source_field: "f",
+    raw_value: null, normalized_value: null, confidence: "low", eligible: true, eligibility_reasons: [],
+    ...over,
+  });
+  // client wins over db even though both eligible
+  const out = reconcileField({
+    field: "cast_time_ms",
+    candidates: [
+      cand({ source: "client_dbc", precedence_tier: "client_dbc", normalized_value: 1500, confidence: "high" }),
+      cand({ source: "ascension_db", precedence_tier: "ascension_db", normalized_value: 2000, confidence: "medium" }),
+    ],
+  });
+  assert.equal(out.selected, 1500);
+  assert.equal(out.provenance.selected_source, "client_dbc");
+  assert.equal(out.provenance.selected_tier, "client_dbc");
+  assert.equal(out.provenance.selection_reason, REASON.HIGHEST_PRECEDENCE_ELIGIBLE);
+  assert.equal(out.provenance.candidates.length, 2);
+  assert.equal(out.hadConflict, false);
+});
+
+test("reconcileField marks ALL same-tier conflicters ineligible and falls through", () => {
+  const b = (id, v) => ({
+    source: "builder", precedence_tier: "inferred", source_id: `builder_node:${id}`, source_field: "damage_schools",
+    raw_value: v, normalized_value: v, confidence: "medium", eligible: true, eligibility_reasons: [],
+  });
+  const out = reconcileField({
+    field: "schools",
+    candidates: [
+      { source: "client_dbc", precedence_tier: "client_dbc", source_id: "client_spell:1", source_field: "school_mask",
+        raw_value: 8, normalized_value: ["nature"], confidence: "high", eligible: true, eligibility_reasons: [] },
+      b(7131, ["nature"]), b(12264, ["shadow"]),
+    ],
+  });
+  assert.deepEqual(out.selected, ["nature"]); // client wins
+  assert.equal(out.hadConflict, true);
+  const builders = out.provenance.candidates.filter((c) => c.source === "builder");
+  assert(builders.every((c) => c.eligible === false));
+  assert(builders.every((c) => c.eligibility_reasons.includes(REASON.SAME_TIER_CONFLICT)));
+});
+
+test("reconcileField omits field when only tier conflicts", () => {
+  const b = (id, v) => ({
+    source: "builder", precedence_tier: "inferred", source_id: `builder_node:${id}`, source_field: "damage_schools",
+    raw_value: v, normalized_value: v, confidence: "medium", eligible: true, eligibility_reasons: [],
+  });
+  const out = reconcileField({ field: "schools", candidates: [b(1, ["nature"]), b(2, ["shadow"])] });
+  assert.equal(out.selected, undefined);
+  assert.equal(out.provenance.selection_reason, REASON.OMITTED_UNRESOLVED_CONFLICT);
+});
+
+test("dbIdentityReference prefers client name, then consensus builder, then db", () => {
+  assert.equal(dbIdentityReference({ clientName: "Adrenal Venom", builderNames: ["X"], dbName: "Y" }), "Adrenal Venom");
+  assert.equal(dbIdentityReference({ clientName: "", builderNames: ["Ward", "Ward"], dbName: "Y" }), "Ward");
+  assert.equal(dbIdentityReference({ clientName: "", builderNames: ["A", "B"], dbName: "Y" }), "Y");
+});
+
+test("applyDbIdentityGate excludes a name-mismatched db row (name_match ignored as veto)", () => {
+  const stale = { name: "Fang Venom: Lifeblood", name_match: false };
+  const fresh = { name: "Adrenal Venom", name_match: false }; // builder-based name_match is audit-only
+  assert.equal(applyDbIdentityGate({ dbRow: stale, referenceName: "Adrenal Venom" }).excluded, true);
+  assert.equal(applyDbIdentityGate({ dbRow: fresh, referenceName: "Adrenal Venom" }).excluded, false);
+});
+
+test("fieldCandidates: client cast_time 0 is present (missing != zero), db excluded contributes nothing", () => {
+  const clientRec = {
+    mechanics: { cast_time_ms: 0, school_mask: 8, power_type: 3, duration_ms: null, range_max_yd: 30 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { confidence: "high" },
+    spell_id: 42,
+  };
+  const dbRow = { id: 42, cast_time_ms: 2000, name: "Stale" };
+  const cands = fieldCandidates({ field: "cast_time_ms", clientRec, builderNodes: [], dbRow, dbExcluded: true });
+  const client = cands.find((c) => c.source === "client_dbc");
+  assert.equal(client.normalized_value, 0);
+  assert.equal(client.eligible, true);
+  // db excluded → either absent or ineligible db_identity_mismatch
+  const db = cands.find((c) => c.source === "ascension_db");
+  assert(!db || db.eligible === false);
+});
+
+test("fieldCandidates: client cast_time ineligible when SpellCastTimes drifted", () => {
+  const clientRec = {
+    mechanics: { cast_time_ms: 1500 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "low", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { confidence: "high" }, spell_id: 7,
+  };
+  const cands = fieldCandidates({ field: "cast_time_ms", clientRec, builderNodes: [], dbRow: null, dbExcluded: false });
+  const client = cands.find((c) => c.source === "client_dbc");
+  assert.equal(client.eligible, false);
+  assert(client.eligibility_reasons.includes("client_table_drift"));
+});
+
+test("buildMechanicsRows: one row per spell_id, client field wins, schools + field_provenance present", () => {
+  const projection = [{
+    spell_id: 92117, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entryA = { spell_id: 92117, entry_id: 501, entry_type: "Ability", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const entryB = { spell_id: 92117, entry_id: 777, entry_type: "Talent", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const dbRow = { id: 92117, name: "Adrenal Venom", name_match: true, cast_time_ms: 2000, cooldown_ms: 30000, gcd_ms: 1500, tooltip_text: "Deals Nature damage." };
+  const rows = buildMechanicsRows({ entries: [entryA, entryB], spellRows: [dbRow], projection });
+  assert.equal(rows.length, 1);
+  const r = rows[0];
+  assert.equal(r.spell_id, 92117);
+  assert.deepEqual(r.source_node_ids, [501, 777]);
+  assert.equal(r.cast_time_ms, 0); // client 0 beats db 2000 (missing != zero)
+  assert.deepEqual(r.schools, ["nature"]);
+  assert.equal(r.cooldown_ms, 30000); // db-only field survives (identity matched)
+  assert.equal(r.field_provenance.cast_time_ms.selected_source, "client_dbc");
+  assert.equal(r.field_provenance.effects.selected_source, "inferred"); // effects field has provenance
+  assert.deepEqual(r.raw.tags, ["damage"]); // builder tags carried under raw, not a top-level v1 field
+  assert.equal(r.tags, undefined); // NOT a top-level field (would be dropped by the v1 loader)
+  // the identity-matched db tooltip participated in classifying kind → recorded as a db candidate
+  assert(r.field_provenance.kind.candidates.some((c) => c.source === "ascension_db" && c.source_field === "tooltip_text"));
+});
+
+test("buildMechanicsRows: identity-mismatched db row supplies zero fields", () => {
+  const projection = [{
+    spell_id: 5, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 1500, duration_ms: null, range_min_yd: null, range_max_yd: null, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entry = { spell_id: 5, entry_id: 9, entry_type: "Ability", name: "Adrenal Venom", damage_schools: [], resources: [] };
+  const staleDb = { id: 5, name: "Fang Venom: Lifeblood", name_match: false, cooldown_ms: 999, gcd_ms: 1500 };
+  const rows = buildMechanicsRows({ entries: [entry], spellRows: [staleDb], projection });
+  assert.equal(rows[0].cooldown_ms ?? null, null); // db excluded → no cooldown leaks
+  // and the excluded db cooldown candidate is recorded as ineligible (audit retained)
+  assert.equal(rows[0].field_provenance.cooldown_ms.candidates[0].eligible, false);
+  // the excluded db row must not leak into kind classification either (no db tooltip candidate)
+  assert(!rows[0].field_provenance.kind.candidates.some((c) => c.source === "ascension_db"));
+  assert(!rows[0].provenance.some((p) => p.source === "ascension_db")); // nothing db survives
+});
+
+test("buildMechanicsRows: output is input-node-order-independent (canonicalized by entry_id)", () => {
+  const projection = [{
+    spell_id: 92117, name: "Adrenal Venom",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const a = { spell_id: 92117, entry_id: 501, entry_type: "Ability", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["damage"] };
+  const b = { spell_id: 92117, entry_id: 777, entry_type: "Talent", name: "Adrenal Venom", damage_schools: ["nature"], resources: ["energy"], tags: ["dot"] };
+  const forward = buildMechanicsRows({ entries: [a, b], spellRows: [], projection });
+  const reversed = buildMechanicsRows({ entries: [b, a], spellRows: [], projection });
+  assert.equal(JSON.stringify(forward), JSON.stringify(reversed));
+  assert.deepEqual(forward[0].raw.tags, ["damage", "dot"]); // set-like union, sorted, under raw
+});
+
+test("buildMechanicsRows: db-derived cooldown always leaves a db provenance entry", () => {
+  const projection = [{
+    spell_id: 9, name: "X",
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: null, range_min_yd: null, range_max_yd: null, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  }];
+  const entry = { spell_id: 9, entry_id: 1, entry_type: "Ability", name: "X", damage_schools: [], resources: [] };
+  const dbRow = { id: 9, name: "X", name_match: true, cooldown_ms: 30000 };
+  const rows = buildMechanicsRows({ entries: [entry], spellRows: [dbRow], projection });
+  assert.equal(rows[0].cooldown_ms, 30000);
+  assert(rows[0].provenance.some((p) => p.source === "ascension_db")); // union includes db
+  assert.equal(rows[0].field_provenance.cooldown_ms.selected_source, "ascension_db");
+});
+
+function writeProjectionFixture(dir, records) {
+  const proj = path.join(dir, "p.jsonl");
+  const man = path.join(dir, "p.manifest.json");
+  const body = records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : "");
+  fs.writeFileSync(proj, body);
+  const sha = crypto.createHash("sha256").update(body).digest("hex");
+  const uniq = new Set(records.map((r) => r.spell_id)).size;
+  fs.writeFileSync(man, JSON.stringify({
+    schema_version: "coa-client-spell-projection-v1",
+    projection: { path: "p.jsonl", sha256: sha, byte_length: Buffer.byteLength(body) },
+    counts: { projected_records: records.length, unique_spell_ids: uniq, source_records: records.length },
+    client_build: "test-client-build",
+  }));
+  return { proj, man };
+}
+
+function validProjRec(spell_id) {
+  return {
+    schema_version: "coa-client-spell-v1", spell_id, name: `S${spell_id}`,
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
+    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    coa_attribution: { is_coa: true, confidence: "high" },
+  };
+}
+
+test("loadAndValidateProjection: coverage gap fails", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "proj-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1, 2]) }),
+    /builder_missing_from_projection/,
+  );
+});
+
+test("loadAndValidateProjection: torn pair (only one file) throws even though it looks 'absent'", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "torn-"));
+  const { proj } = writeProjectionFixture(dir, [validProjRec(1)]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: path.join(dir, "missing.json"), builderSpellIds: new Set([1]) }),
+    /torn projection pair/,
+  );
+});
+
+test("loadAndValidateProjection: per-table drift on a populated field throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "drift-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.SpellCastTimes = "low"; // cast_time_ms is populated (0)
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /SpellCastTimes drift/,
+  );
+});
+
+test("loadAndValidateProjection: both files absent returns { absent: true }", () => {
+  const out = loadAndValidateProjection({ projectionPath: "/no/such.jsonl", manifestPath: "/no/such.json", builderSpellIds: new Set() });
+  assert.equal(out.absent, true);
+});
+
+test("loadAndValidateProjection: non-numeric cast_time_ms throws (no string leaks to canonical)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badnum-"));
+  const rec = validProjRec(1);
+  rec.mechanics.cast_time_ms = "2000"; // string, not number
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /cast_time_ms must be number\|null/,
+  );
+});
+
+test("loadAndValidateProjection: negative school_mask throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "negmask-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = -8;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /school_mask must be a non-negative integer/,
+  );
+});
+
+test("loadAndValidateProjection: fractional school_mask throws (bitmask must be integer)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fracmask-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = 8.5;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /school_mask must be integer\|null/,
+  );
+});
+
+test("loadAndValidateProjection: unknown school-mask bit throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badbit-"));
+  const rec = validProjRec(1);
+  rec.mechanics.school_mask = 1 << 20; // no such school
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /unknown school-mask bits/,
+  );
+});
+
+test("loadAndValidateProjection: unknown power_type enum throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badpwr-"));
+  const rec = validProjRec(1);
+  rec.mechanics.power_type = 99;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /unknown power_type/,
+  );
+});
+
+test("loadAndValidateProjection: confidence value outside {high,low} throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badconf-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.SpellDuration = "medium";
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /must map .* to high\|low/,
+  );
+});
+
+test("loadAndValidateProjection: low Spell confidence throws (name + every field unreliable)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spelldrift-"));
+  const rec = validProjRec(1);
+  rec.provenance.schema_match_confidence_by_dbc.Spell = "low";
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /Spell table drift/,
+  );
+});
+
+test("loadAndValidateProjection: missing manifest.counts member throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nocounts-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  delete parsed.counts.unique_spell_ids;
+  fs.writeFileSync(man, JSON.stringify(parsed));
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /manifest.counts must have integer/,
+  );
+});
+
+test("loadAndValidateProjection: manifest byte_length disagreeing with the file throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badlen-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  parsed.projection.byte_length += 1; // still an integer, but wrong
+  fs.writeFileSync(man, JSON.stringify(parsed));
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /byte_length mismatch/,
+  );
+});
+
+test("buildMechanicsArtifact: absent projection without flag fails closed (writes nothing)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mech-"));
+  assert.throws(() => buildMechanicsArtifact({
+    entries: [{ spell_id: 1, entry_id: 1, entry_type: "Ability", name: "X" }],
+    spellRows: [], projectionPath: "/no.jsonl", manifestPath: "/no.json", outDir: dir, allowFallback: false,
+  }), /projection/i);
+  assert.equal(fs.existsSync(path.join(dir, "coa_mechanics.jsonl")), false);
+});
+
+test("buildMechanicsArtifact: absent projection + fallback writes degraded, canonical:false", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mech-"));
+  const out = buildMechanicsArtifact({
+    entries: [{ spell_id: 1, entry_id: 1, entry_type: "Ability", name: "X", damage_schools: [], resources: [] }],
+    spellRows: [], projectionPath: "/no.jsonl", manifestPath: "/no.json", outDir: dir, allowFallback: true,
+  });
+  assert.equal(out.canonical, false);
+  assert.equal(fs.existsSync(path.join(dir, "coa_mechanics.fallback.jsonl")), true);
+  const man = JSON.parse(fs.readFileSync(path.join(dir, "coa_mechanics.fallback.manifest.json"), "utf8"));
+  assert.equal(man.canonical, false);
+  assert.equal(man.client_source, "absent");
+  assert.equal(man.reconciler_commit, null);
+  assert.equal(man.client_build, null);
+  assert.equal(typeof man.counts.omitted_fields, "number");
+});
+
+test("acceptance: manifest binds the EXACT generated projection sha; canonical true", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acc-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(42)]);
+  const projSha = crypto.createHash("sha256").update(fs.readFileSync(proj)).digest("hex");
+  const out = buildMechanicsArtifact({
+    entries: [{ spell_id: 42, entry_id: 1, entry_type: "Ability", name: "S42", damage_schools: [], resources: [] }],
+    spellRows: [], projectionPath: proj, manifestPath: man, outDir: dir, allowFallback: false,
+    inputs: { projection_path: proj, projection_manifest_path: man, reconciler_commit: "deadbeef" },
+  });
+  assert.equal(out.canonical, true);
+  assert.equal(out.manifest.inputs.projection.sha256, projSha);
+  assert.equal(out.manifest.coverage.builder_missing_from_projection, 0);
+  assert.equal(out.manifest.reconciler_commit, "deadbeef");
+  assert.equal(out.manifest.client_build, "test-client-build");
+  const c = out.manifest.counts;
+  for (const k of ["unresolved_conflicts", "ineligible_candidates", "omitted_fields", "kind_disagreements"]) {
+    assert.equal(typeof c[k], "number", `counts.${k} must be an integer`);
+  }
+});
+
+test("acceptance: fallback does NOT modify a pre-existing canonical artifact", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acc2-"));
+  const canonical = path.join(dir, "coa_mechanics.jsonl");
+  fs.writeFileSync(canonical, "SENTINEL-CANONICAL\n");
+  buildMechanicsArtifact({
+    entries: [{ spell_id: 1, entry_id: 1, entry_type: "Ability", name: "X", damage_schools: [], resources: [] }],
+    spellRows: [], projectionPath: "/no.jsonl", manifestPath: "/no.json", outDir: dir, allowFallback: true,
+  });
+  assert.equal(fs.readFileSync(canonical, "utf8"), "SENTINEL-CANONICAL\n"); // untouched
+  assert.equal(fs.existsSync(path.join(dir, "coa_mechanics.fallback.jsonl")), true);
+});
+
+test("acceptance: identity-mismatched db supplies zero fields AND zero db-derived effects end-to-end", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acc3-"));
+  // No client school and no builder tooltip → the ONLY thing that could produce an effect is the
+  // db's "summon a pet" tooltip. Since the db row fails identity, it must be excluded → zero effects.
+  const rec = validProjRec(7);
+  rec.mechanics.school_mask = 0;
+  rec.mechanics.duration_ms = null;
+  rec.mechanics.range_min_yd = null;
+  rec.mechanics.range_max_yd = null;
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  const out = buildMechanicsArtifact({
+    entries: [{ spell_id: 7, entry_id: 1, entry_type: "Ability", name: "S7", damage_schools: [], resources: [] }],
+    spellRows: [{ id: 7, name: "Totally Different", name_match: false, cooldown_ms: 999, gcd_ms: 1500, tooltip_text: "summon a pet" }],
+    projectionPath: proj, manifestPath: man, outDir: dir, allowFallback: false,
+  });
+  const row = JSON.parse(fs.readFileSync(path.join(dir, "coa_mechanics.jsonl"), "utf8").trim());
+  assert.equal(row.cooldown_ms ?? null, null);
+  assert.equal(row.gcd_ms ?? null, null);
+  assert.equal(row.raw.db_excluded, true);
+  assert(!row.provenance.some((p) => p.source === "ascension_db")); // no db provenance leaked
+  assert.equal(row.effects.length, 0); // the excluded db "summon a pet" tooltip yields NO effect
+  // Non-vacuous counts check: isolate the db-identity-gate's contribution with a CONTROL build that is
+  // byte-for-byte identical except the db name MATCHES identity (gate does NOT trigger), so cooldown_ms
+  // and gcd_ms resolve to ascension_db instead of being barred+omitted. The fixture's null client fields
+  // (school_mask:0, null duration/range) are identical in both runs and cancel in the delta — so a
+  // regression that silently disabled applyDbIdentityGate would break this exact-2 delta.
+  const ctrlDir = fs.mkdtempSync(path.join(os.tmpdir(), "acc3ctrl-"));
+  const ctrl = buildMechanicsArtifact({
+    entries: [{ spell_id: 7, entry_id: 1, entry_type: "Ability", name: "S7", damage_schools: [], resources: [] }],
+    spellRows: [{ id: 7, name: "S7", name_match: true, cooldown_ms: 999, gcd_ms: 1500, tooltip_text: "summon a pet" }],
+    projectionPath: proj, manifestPath: man, outDir: ctrlDir, allowFallback: false,
+  });
+  assert.equal(out.manifest.counts.ineligible_candidates - ctrl.manifest.counts.ineligible_candidates, 2); // exactly the 2 barred db candidates
+  assert.equal(out.manifest.counts.omitted_fields - ctrl.manifest.counts.omitted_fields, 2);               // exactly cooldown_ms + gcd_ms
+});
+
+test("acceptance: kind_disagreements counts a real Builder kind disagreement (Ability vs Talent, no tooltip)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acc4-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(100)]);
+  // No db row and no builder description_text → tooltipText is "". "Ability" classifies as "ability";
+  // "Talent" with no cast/deals/heals tooltip match classifies as "passive" (classifyMechanicKind's
+  // first branch) → the two nodes disagree on kind and resolveKind records
+  // REASON.KIND_NODE_DISAGREEMENT_RESOLVED for the row's kind field.
+  const entryA = { spell_id: 100, entry_id: 1, entry_type: "Ability", name: "S100", damage_schools: [], resources: [] };
+  const entryB = { spell_id: 100, entry_id: 2, entry_type: "Talent", name: "S100", damage_schools: [], resources: [] };
+  const out = buildMechanicsArtifact({
+    entries: [entryA, entryB],
+    spellRows: [], projectionPath: proj, manifestPath: man, outDir: dir, allowFallback: false,
+  });
+  assert.equal(out.manifest.counts.kind_disagreements, 1);
 });

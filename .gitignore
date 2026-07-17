@@ -28,3 +28,12 @@ reports/meta/assets/guide-site-manifest.json
 
 # Claude Design reference materials (local design product, not part of the repo)
 design/
+
+# M1.14C client-derived factual outputs — regenerate from your own client (never committed)
+reports/client_extract/coa_client_spell.jsonl
+reports/client_extract/coa_client_spell_coa.jsonl
+reports/client_extract/coa_client_spell_projection.manifest.json
+coa_scraper/dist/coa_mechanics.jsonl
+coa_scraper/dist/coa_mechanics.manifest.json
+coa_scraper/dist/coa_mechanics.fallback.jsonl
+coa_scraper/dist/coa_mechanics.fallback.manifest.json
