@@ -207,3 +207,18 @@ def recon(backend: ArchiveBackend, root, attach, *, axis_policy, rating_enum, po
                                                             if str(r) not in rating_supported),
                               "unmapped_power_types": []},
             "class_context_resolution": "unproven"}
+
+
+def run_recon(client_root, out_dir, *, backend, plan) -> dict:
+    root, attach = plan.open_chain
+    axis = load_authored_input("gt_axis_policy")
+    layouts, ls, rs = load_axis_policy(axis.payload)
+    report = recon(backend, root, attach, axis_policy=(layouts, ls, rs),
+                   rating_enum=load_authored_input("rating_enum").payload,
+                   power_type_enum=load_authored_input("power_type_enum").payload,
+                   reference_class_axis=axis.payload["class_axis"])
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "coa_wow_constants_recon.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return report

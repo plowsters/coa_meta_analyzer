@@ -328,6 +328,13 @@ def main(argv: list[str] | None = None) -> int:
     dec.add_argument("--content-json", required=True, type=Path)
     dec.add_argument("--out", required=True, type=Path)
     dec.add_argument("--stormlib", default=None)
+
+    wc = sub.add_parser("wow-constants", help="extract coa-wow-constants-v1 GameTable primitives")
+    wc.add_argument("--client-root", required=True, type=Path)
+    wc.add_argument("--out", required=True, type=Path)
+    wc.add_argument("--stormlib", default=None)
+    wc.add_argument("--recon-only", action="store_true")
+    wc.add_argument("--adjudication", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "regenerate":
@@ -348,4 +355,28 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         return 0
+    if args.command == "wow-constants":
+        try:
+            wow_constants_command(args.client_root, args.out, stormlib_path=args.stormlib,
+                                  recon_only=args.recon_only, adjudication_path=args.adjudication)
+        except BackendUnavailable as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return 0
     return 1
+
+
+def wow_constants_command(client_root: Path, out_dir: Path, *, backend: ArchiveBackend | None = None,
+                          stormlib_path: str | None = None, recon_only: bool = False,
+                          adjudication_path: str | None = None) -> dict:
+    if backend is None:
+        from .stormlib_backend import StormLibBackend
+        backend = StormLibBackend(stormlib_path=stormlib_path)  # may raise BackendUnavailable
+    plan = discover_plan(client_root)
+    from .wow_constants import run_recon
+    if recon_only:
+        return run_recon(client_root, out_dir, backend=backend, plan=plan)
+    from .wow_constants import run_extract          # added in Task 10
+    return run_extract(client_root, out_dir, backend=backend, plan=plan,
+                       extractor_commit=_extractor_commit(), client_build=_client_build(plan),
+                       adjudication_path=adjudication_path)
