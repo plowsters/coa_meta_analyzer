@@ -133,3 +133,77 @@ def build_class_axis(chr_rows: list[dict], *, reference_expected_ids: list[int],
 
 def class_roster(class_axis: dict) -> list[int]:
     return list(class_axis["observed_client_ids"])
+
+
+import math
+from collections import defaultdict
+
+from .archive_backend import ArchiveBackend
+from .dbc_layouts import CHR_CLASSES
+from .errors import ArchiveError
+from .wdbc import classify_physical_form, parse_dbc, parse_gametable
+
+
+def _monotonic_violations(entries: list[dict], group_axis: str, order_axis: str) -> int:
+    series = defaultdict(list)
+    for e in entries:
+        if group_axis in e and order_axis in e:
+            series[e[group_axis]].append((e[order_axis], e["value"]))
+    violations = 0
+    for pts in series.values():
+        pts.sort()
+        violations += sum(1 for (_, a), (_, b) in zip(pts, pts[1:]) if b < a)  # nondecreasing
+    return violations
+
+
+def recon(backend: ArchiveBackend, root, attach, *, axis_policy, rating_enum, power_type_enum,
+          reference_class_axis, chr_layout=CHR_CLASSES) -> dict:
+    layouts, level_stride, rating_stride = axis_policy
+
+    chr_member = backend.read_effective_file(root, attach, "DBFilesClient\\ChrClasses.dbc")
+    chr_tbl = parse_dbc(chr_member.data, chr_layout)
+    class_axis = build_class_axis(chr_tbl.rows,
+                                  reference_expected_ids=reference_class_axis["reference_expected_ids"],
+                                  reference_holes=reference_class_axis["reference_holes"],
+                                  power_type_enum=power_type_enum)
+    roster = class_roster(class_axis)
+
+    rating_supported = set(rating_enum.get("supported", {}))
+    observed_ratings: set[int] = set()
+    tables: dict[str, dict] = {}
+    for key, layout in layouts.items():
+        try:
+            member = backend.read_effective_file(root, attach, f"DBFilesClient\\{layout.source_dbc}.dbc")
+        except ArchiveError:
+            tables[key] = {"available": False, "source_dbc": layout.source_dbc}
+            continue
+        table = parse_gametable(member.data, physical_form=layout.physical_form,
+                                expected_field_count=layout.expected_field_count,
+                                expected_record_size=layout.expected_record_size,
+                                value_cell=layout.value_cell, id_cell=layout.id_cell)
+        physical = classify_physical_form(table.field_count, table.record_size)
+        finite_ok = all(math.isfinite(r["value"]) for r in table.rows)
+        try:
+            entries, counts = map_table_entries(layout, table, class_roster=roster,
+                                                level_stride=level_stride, rating_stride=rating_stride)
+            dup = False
+        except ValueError:
+            entries, counts, dup = [], {"emitted_entries": 0}, True
+        observed_ratings |= {e["rating_id"] for e in entries if "rating_id" in e}
+        max_class = max(roster) if (layout.class_indexed and roster) else 0
+        out_of_storage = (layout.class_indexed and layout.index_kind == "class_by_level"
+                          and (max_class - 1) * level_stride >= table.record_count)
+        group, order = (("rating_id", "level") if key == "combat_ratings" else ("wow_class_id", "level"))
+        tables[key] = {"available": True, "source_dbc": layout.source_dbc, "physical_form": physical,
+                       "declared_physical_form": layout.physical_form, "source_records": table.record_count,
+                       "drift": table.drift, "finite_ok": finite_ok, "duplicate_ids": dup,
+                       "coverage": counts, "padding_records": counts.get("padding_records", 0),
+                       "monotonic_violations": _monotonic_violations(entries, group, order),
+                       "extended_class_out_of_storage": bool(out_of_storage),
+                       "class_indexed": layout.class_indexed, "semantics": layout.semantics}
+
+    return {"tables": tables, "class_axis": class_axis,
+            "enum_coverage": {"unmapped_rating_ids": sorted(r for r in observed_ratings
+                                                            if str(r) not in rating_supported),
+                              "unmapped_power_types": []},
+            "class_context_resolution": "unproven"}
