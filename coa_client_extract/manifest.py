@@ -25,3 +25,30 @@ def build_manifest(
         "archive_plan": archive_plan,
         "outputs": outputs,
     }
+
+
+def build_manifest_v2(
+    *,
+    base: dict,
+    generation_id: str,
+    published_at: int,
+    predecessor_generation_id: str | None,
+    children: dict,
+    unknown_symbol_inventory: dict,
+    binding: dict,
+) -> dict:
+    """A generation-local manifest: a SUPERSET of all ten v1 fields (from `base`) plus generation
+    identity, monotonic `published_at` (ns), the pointer's prior target `predecessor_generation_id`,
+    the exact `children` inventory, the per-value `unknown_symbol_inventory`, and source/policy/anchor/
+    enum `binding` hashes. `outputs` is re-derived as a deterministic {name: sha256} INDEX VIEW over
+    `children` — for migrated resolvers only, NOT backward compatibility for unmigrated v1 consumers."""
+    manifest = dict(base)
+    manifest["schema_version"] = "coa-client-extract-manifest-v2"
+    manifest["outputs"] = {name: meta["sha256"] for name, meta in sorted(children.items())}
+    manifest["generation_id"] = generation_id
+    manifest["published_at"] = published_at
+    manifest["predecessor_generation_id"] = predecessor_generation_id
+    manifest["children"] = children
+    manifest["unknown_symbol_inventory"] = unknown_symbol_inventory
+    manifest["binding"] = binding
+    return manifest
