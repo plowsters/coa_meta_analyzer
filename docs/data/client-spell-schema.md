@@ -1,34 +1,43 @@
 # Client Spell Schema
 
-Records use schema version `coa-client-spell-v1`, produced by `coa_client_extract` (M1.14A) from the
-CoA client's MPQ→DBC spell family. Attribution is now filled by M1.14B from `CharacterAdvancement.dbc`
-(see [client-advancement-schema.md](client-advancement-schema.md)); reconciliation into
-`coa-mechanics-v1` is M1.14C.
+Records use schema version `coa-client-spell-v2` (M1.14E0), produced by `coa_client_extract` from the
+CoA client's MPQ→DBC spell family. v2 builds records straight from raw `RecordView` cells under a
+human-reviewed, hash-bound spell-layout **policy** (`coa_client_extract/data/spell_layout_v1.json`);
+every emitted DBC-derived value carries a raw+proof `field_observations` entry, and the normalized
+`mechanics`/`name` values are copied from those observations. Attribution is filled by M1.14B from
+`CharacterAdvancement.dbc` (see [client-advancement-schema.md](client-advancement-schema.md)).
+
+**Migration.** v1 (`coa-client-spell-v1`) and its table-level `schema_match_confidence_by_dbc` field
+certification are **retired**. The Node reader rejects v1 rows/manifests with "regenerate with
+M1.14E". Per-field/per-value observation proof is now authoritative.
 
 ## Required Fields
-- `schema_version`: always `coa-client-spell-v1`
+- `schema_version`: always `coa-client-spell-v2`
 - `spell_id`: DBC spell id
-- `name`: localized spell name from `Spell.dbc`
-- `mechanics`: object with `school_mask`, `power_type`, `cast_time_ms`, `duration_ms`,
-  `range_min_yd`, `range_max_yd`, `category`, `spell_icon_id` (any may be null when the source row is
-  absent)
-- `provenance`: `base_archive`, `patch_chain`, `effective_archive`, `source_dbcs`,
-  `schema_match_confidence` (`high`|`low`), `schema_match_confidence_by_dbc`, `extraction_date`
-  - `patch_chain` / `effective_archive` are StormLib's own reported chain of archives that
-    supplied the winning bytes (winner last), not the attach order.
+- `name`: localized spell name from `Spell.dbc` (`null` if withheld)
+- `mechanics`: normalized scalars (each `null` when withheld/unresolved): `power_type`, `school_mask`,
+  `cast_time_ms`, `duration_ms`, `range_min_yd`, `range_max_yd`, `spell_icon_id`. **`category` is
+  omitted from v2** (no proven cell). A normalized value is present ONLY when its observation is
+  promotion-eligible (proof verified) AND, for `power_type`/`school_mask`, the value is in-domain.
+- `field_observations`: per DBC-derived value, a raw+proof observation:
+  - **Envelope** (numeric scalars): `{state, raw_u32, decoded, decoded_reason, proof, evidence_ref}`.
+    `power_type`/`school_mask` are per-value **domain-gated**: an unseen enum/bit sets
+    `decoded_reason: "value_out_of_domain"`, keeps `raw_u32`, and withholds the normalized value.
+  - **StringObservation** (`name`, `description`): `{state, raw_offset, resolved, decoded_reason, proof,
+    evidence_ref}`. `description` is `reference`-grade (tooltip macros unresolved) → `resolved` withheld.
+  - **JoinObservation** (`cast_time_ms`, `duration_ms`, `range_min/max_yd`, `spell_icon_id`):
+    `{state, components, composed_proof, decoded, decoded_reason}` with honest states `resolved` /
+    `not_applicable` (index 0) / `unresolved` (side row missing, or an un-adjudicated null-cell join).
+  - `proof` facets are `{integrity, layout, interpretation}` ∈ `{verified, reference, unproven,
+    contradicted}`. See [DECISIONS.md](../DECISIONS.md) Decision 23.
+- `provenance`: `base_archive`, `patch_chain`, `effective_archive`, `source_dbcs`, `policy_sha256`,
+  `extraction_date`
+  - `patch_chain` / `effective_archive` are StormLib's own reported chain (winner last), not attach order.
   - `source_dbcs` maps each contributing table (`Spell`, `SpellCastTimes`, `SpellDuration`,
-    `SpellRange`) to the archive that supplied it.
-  - `schema_match_confidence_by_dbc` (**M1.14C**, `coa_client_extract/artifacts.py`): a per-table
-    breakdown, `{"Spell": "high"|"low", "SpellCastTimes": "high"|"low", "SpellDuration": "high"|"low",
-    "SpellRange": "high"|"low"}`. `schema_match_confidence` (singular, M1.14A) is a coarse whole-record
-    summary driven only by `Spell` table drift; `schema_match_confidence_by_dbc` is the finer-grained
-    signal M1.14C's mechanics reconciler actually consumes — each mechanics field only accepts a
-    client-sourced value when **every** DBC table that field depends on is `"high"` for that record (see
-    [Canonical Build Failure Conditions](#canonical-build-failure-conditions) below). A table entry is
-    `"low"` when that side table is absent, or present but drifted; `Spell` itself is `"low"` when
-    `Spell.dbc` parsed with drift. Since `name` and every `mechanics.*` field ultimately depend on
-    `Spell`, a `Spell: "low"` record is unusable as a client-tier source for **any** field, not just the
-    ones with their own side table.
+    `SpellRange`, `SpellIcon`) to the archive that supplied it.
+  - `policy_sha256` pins the exact spell-layout policy the record was extracted under.
+  - Structural drift no longer produces a per-field low flag: a drifted spell-family table makes
+    `open_view`/`require_dense` raise and the whole extract **fails closed** (nothing is emitted).
 - `coa_attribution`: **filled by M1.14B** from the `CharacterAdvancement.dbc` participation model
   (see [client-advancement-schema.md](client-advancement-schema.md) and
   [DECISIONS.md](../DECISIONS.md) Decision 18-amended). The M1.14A placeholder
@@ -73,61 +82,41 @@ M1.14A extracts the reduced spell family: `Spell` plus the three index tables it
 **deferred to a later M1.14 sub-milestone**. Those tables are load-bearing for the M1.16
 power model, not for M1.14A extraction, and are tracked as follow-up rather than dropped.
 
-## The CoA Spell Projection (`coa-client-spell-projection-v1`)
+## The CoA Spell Projection (`coa-client-spell-projection-v2`)
 
-`coa_client_extract/artifacts.py::write_client_spell_projection` filters the full `coa-client-spell-v1`
-extract down to the CoA-attributed subset and writes it, plus a binding manifest, as a separate
-artifact. This projection — not the full spell extract — is the client-tier input
-`coa_scraper/scripts/build-mechanics-artifacts.mjs` reads when building `coa-mechanics-v1` records
-(see [mechanics-schema.md](mechanics-schema.md)).
+`coa_client_extract/artifacts.py::write_client_spell_projection` filters the full `coa-client-spell-v2`
+extract down to the CoA-attributed subset (`coa_attribution.is_coa == true`) and writes it plus a
+binding manifest. The projection — not the full spell extract — is the client-tier input the Node
+mechanics build reads. **It is published transactionally inside a generation** and consumed via the
+validated pointer (see [client-extract-generation-schema.md](client-extract-generation-schema.md)); the
+fixed-path files remain only for the legacy `--allow-fallback-mechanics` degraded path.
 
-**Scope.** The projection includes exactly the records where `coa_attribution.is_coa == true`
-(the `inclusion_rule.predicate` recorded in the manifest below) — i.e. it is scoped by the client's
-**own** attribution, never by the Builder's `spell_id` domain. A record can be `projection_only`
-(present in the projection, absent from the Builder) and the projection does not filter that out.
-
-**Files.** `coa_client_spell_coa.jsonl` (the filtered records, one `coa-client-spell-v1` record per
-line) and `coa_client_spell_projection.manifest.json` (the binding manifest), both written under
-`reports/client_extract/`. Duplicate `spell_id`s in the filtered set are a hard error (raised before
-either file is written). Written with the same manifest-as-validity-marker protocol as the mechanics
-artifact: old manifest removed first, JSONL written atomically, manifest written atomically last.
-
-**Projected fields.** Each row is a full `coa-client-spell-v1` record (`schema_version`, `spell_id`,
-`name`, `mechanics`, `provenance` including `schema_match_confidence_by_dbc`, `coa_attribution`,
-`memberships[]`) — the projection does not strip or reshape fields, it only filters rows.
+**Projected fields.** Each row is a full `coa-client-spell-v2` record (including its
+`field_observations` block) — the projection filters rows, it does not reshape them.
 
 **Manifest shape:**
 
 ```jsonc
 {
-  "schema_version": "coa-client-spell-projection-v1",
-  "inclusion_rule": { "predicate": "coa_attribution.is_coa == true", "version": "m1.14c-1" },
+  "schema_version": "coa-client-spell-projection-v2",
+  "inclusion_rule": { "predicate": "coa_attribution.is_coa == true", "version": "m1.14e-1" },
   "source_artifact": { "path": "coa_client_spell.jsonl", "sha256": "...", "byte_length": 12345 },
   "projection": { "path": "coa_client_spell_coa.jsonl", "sha256": "...", "byte_length": 6789 },
   "client_build": "3.3.5a+<top-patch>",
-  "extractor_commit": "<git sha of coa_client_extract at extraction time>",
-  "extraction_date": "YYYY-MM-DD",
-  "counts": {
-    "source_records": 40000,
-    "projected_records": 1234,
-    "unique_spell_ids": 1234,
-    "by_confidence": { "high": 1000, "medium": 200, "low": 34 }
-  },
-  "schema_confidence_summary": {
-    "records_with_any_low_table": 12,
-    "records_all_high": 1222
-  }
+  "extractor_commit": "...", "extraction_date": "YYYY-MM-DD",
+  "counts": { "source_records": 40000, "projected_records": 1234, "unique_spell_ids": 1234,
+              "by_confidence": { "high": 1000, "medium": 200, "low": 34 } },
+  "value_gate_summary": { "records_with_withheld_value": 12, "records_all_in_domain": 1222 }
 }
 ```
 
-`by_confidence` buckets projected rows by `coa_attribution.confidence` (`high`/`medium`/`low`, see
-above). `schema_confidence_summary` buckets by whether **any** table in that row's
-`schema_match_confidence_by_dbc` is `"low"` — a quick health check independent of `by_confidence`.
+`value_gate_summary` (replacing v1's `schema_confidence_summary`) buckets rows by whether any
+`field_observations` entry withheld a normalized value for an out-of-domain symbol (`raw` retained).
 
-`coa_scraper/scripts/lib/mechanics-projection.mjs` (`loadAndValidateProjection`) is the sole reader:
-it re-hashes both files and rejects the pair on any sha256/byte_length mismatch, missing/mismatched
-`schema_version`, a non-`is_coa` row, a duplicate `spell_id`, or a count mismatch against the
-manifest — before a single record is used for reconciliation.
+`coa_scraper/scripts/lib/mechanics-projection.mjs` (`loadAndValidateProjection`) is the sole reader: it
+re-hashes both files and rejects the pair on any sha256/byte_length mismatch, a **v1 schema** (with
+"regenerate with M1.14E"), a non-`is_coa` row, a duplicate `spell_id`, a count mismatch, or a
+populated numeric normalized value that disagrees with (or lacks) its `field_observations` entry.
 
 ## Enum & Sentinel Reference
 
@@ -159,32 +148,26 @@ with fire **and** shadow damage carries mask `4 | 32 == 36`):
 reconciliation and **fails the whole build closed** (throws `MechanicsBuildError`, no partial output)
 on any of:
 
-- An `m.school_mask` bit not present in `SCHOOL_MASK_BITS` (an **unknown mask bit**).
-- An `m.power_type` value not present in `POWER_TYPE_MAP` (an **unknown power enum**).
-- `schema_match_confidence_by_dbc.Spell !== "high"` — `Spell` table drift makes the whole record
-  (name + every mechanics field) unusable as a client-tier source.
-- Per-table drift on a **populated** field the field depends on: e.g. `mechanics.cast_time_ms` is
-  present but `schema_match_confidence_by_dbc.SpellCastTimes !== "high"`. The dependency matrix is
-  `cast_time_ms` → `Spell`+`SpellCastTimes`; `duration_ms` → `Spell`+`SpellDuration`; `range_max_yd` →
-  `Spell`+`SpellRange`; `school_mask`/`power_type` → `Spell` only. An **absent** field with a drifted
-  side table does *not* fail the build (there's nothing populated to trust).
-- A **torn projection pair**: exactly one of the projection JSONL and its manifest exists (JSONL
-  present without its manifest, or manifest without its JSONL). Both must be present together, or
-  both absent (only the fully-absent case is eligible to degrade). A half-written pair throws.
-- Malformed types (non-string `name`, non-number/null numeric fields, non-integer/null int fields,
-  a negative `school_mask`), a missing/malformed `schema_match_confidence_by_dbc` block, sha256 or
-  byte-length mismatch against the projection manifest, a duplicate or non-`is_coa` row, or a
-  `builder_missing_from_projection` coverage gap.
+- A **v1 schema** on the manifest or any row — rejected with "regenerate with M1.14E".
+- An `m.school_mask` bit not in `SCHOOL_MASK_BITS`, or an `m.power_type` not in `POWER_TYPE_MAP`
+  (defensive; the extractor's per-value gate already withholds these to `null`).
+- A populated numeric normalized value that **disagrees with its `field_observations` entry**, or a
+  populated numeric field with **no** observation — the proof/observation is authoritative.
+- A **torn projection pair** (exactly one of the JSONL / manifest exists); only a fully-absent
+  projection may degrade via `--allow-fallback-mechanics`.
+- Malformed types (non-string/null `name`, non-number/null numeric fields, non-integer/null int
+  fields, a negative `school_mask`), sha256/byte-length mismatch against the manifest, a duplicate or
+  non-`is_coa` row, or a `builder_missing_from_projection` coverage gap.
 
-This is the *single malformed-input rule*: only a **fully-absent** projection (no file at all) is
-eligible to degrade to a fallback build via `--allow-fallback-mechanics`; a **present-but-invalid**
-projection fails the build even with that flag. See
+Table-level drift is no longer a projection failure condition: structural drift fails the *extract*
+closed (nothing is emitted), so any row that reaches the projection already parsed cleanly. See
 [mechanics-schema.md § Mechanics Manifest](mechanics-schema.md#mechanics-manifest-coa-mechanics-manifest-v1)
 for how canonical vs. fallback builds are recorded.
 
 ## Consumer Rules
-- `schema_match_confidence: "low"` means DBC drift was detected for a contributing table; downstream
-  consumers must not treat those mechanical fields as high-confidence.
-- `schema_match_confidence_by_dbc` is the field-precise version of the same signal — prefer it over
-  the coarse `schema_match_confidence` when deciding whether one specific mechanical field is trustworthy.
-- Fields may be null; consumers tolerate partial records.
+- Per-field/per-value **observation proof** is authoritative. A `mechanics.*` value is trustworthy iff
+  it is non-`null` (it was populated only because its observation was promotion-eligible and in-domain).
+- The reconciler treats a populated client value as eligible by construction; a `null` value is simply
+  absent (no separate table-drift eligibility signal exists anymore).
+- Fields may be `null`; consumers tolerate partial records. `field_observations` retains the `raw` for
+  every withheld value for audit.

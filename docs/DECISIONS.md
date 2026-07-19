@@ -432,3 +432,56 @@ Reasoning (amendment):
   real drift intact: it absorbs exactly the CamelCase-vs-spaced formatting difference the current
   client and Builder happen to use, while a semantic rename or spell-ID divergence — the cases that
   actually matter — still hard-blocks, unlike a fuzzy-matching approach that could mask a real mismatch.
+
+## Decision 23: Client Mechanics Are Extracted Under a Proven, Client-Bound Policy With Per-Value Proof, and Published Transactionally
+
+Status: accepted (M1.14E0).
+
+Client spell mechanics are extracted from raw `RecordView` cells under a human-reviewed spell-layout
+policy (`coa_client_extract/data/spell_layout_v1.json`) that is **bound to the exact client bytes it
+was proven against**, and published as an immutable, hash-bound generation. Records are
+`coa-client-spell-v2`; the v1 records and their table-level `schema_match_confidence_by_dbc` field
+certification are retired.
+
+- **Proven + hash-bound + client-bound policy.** The policy carries, per emitted value,
+  `{cell, kind, layout, interpretation, promotion, evidence}`, plus `anchor_set`/`enum_policy` (each
+  self-hashed), a `bound` block (`client_build` + per-DBC sha256), and an explicit `reviewed` flag. A
+  loader validates schema/identity, proof-state and `kind` domains, in-bounds + per-table-unique cells,
+  `normalized ⇒ verified`, distinct power-of-two school bits, and hash self-consistency.
+- **Recon proposes, never writes.** `mechanics-recon` discovers every emitted column by scanning
+  (never echoing the policy's cell), and emits a `proposed_policy_delta`. Its lifecycle is
+  `blocked (3) → review_required (4) → verified (0)`. A human applies the delta and flips `reviewed` —
+  recon never self-approves. See [spell-mechanics-recon-schema.md](data/spell-mechanics-recon-schema.md).
+- **Non-bypassable client-binding hold.** `regenerate` re-opens the client, re-hashes `Spell.dbc`, and
+  emits canonical v2 artifacts only when the policy is `reviewed` and its `bound` matches the opened
+  client (`ClientBindingError` → exit 3 otherwise). It never promotes values proven against a different
+  client.
+- **Two decode gates.** A value is decoded only when its proof is `semantic_promotion_eligible`
+  (integrity ∧ layout ∧ interpretation all `verified`) AND, for enums/masks, the specific value is
+  in-domain. The **raw is always retained.** The unknown-symbol amendment: an unseen `power_type` or
+  school bit sets `decoded_reason: "value_out_of_domain"`, withholds the normalized value, and is
+  tallied in the extract's `unknown_symbol_inventory` — masks accept any valid bit combination
+  (`20 == 4|16` passes); the artifact stays valid.
+- **Join observations, honestly stated.** A side-table-joined value is a `JoinObservation` with a
+  composed proof over all parts and honest states (`resolved` / `not_applicable` / `unresolved`). A
+  plain FK-validity scan cannot uniquely resolve the join index columns on the real client, so E0 ships
+  the joins un-adjudicated (raw-only, null cells); value-anchor disambiguation is M1.14E1.
+- **Transactional publication.** `regenerate` (producer) publishes a UUID generation
+  (`gen-<uuid4>/`, `exist_ok=False`) with a binding manifest (superset of the ten v1 fields + generation
+  identity + `predecessor_generation_id` + `published_at` + source/policy/anchor/enum hashes +
+  `unknown_symbol_inventory`) and a validated pointer written last. Both a Python and a Node resolver
+  re-validate pointer schema, containment, manifest hash, and every child's path/sha256/bytes/records/
+  schema. The Node build (consumer) **requires** `--client-extract-pointer`; the fixed-path projection
+  is fallback-only. Retention is a separate best-effort maintenance op — publish never prunes. See
+  [client-extract-generation-schema.md](data/client-extract-generation-schema.md).
+
+Reasoning:
+
+- The real client's current `Spell.dbc` offsets differ from stock 3.3.5a (`power_type@41` not `@110`,
+  `school_mask@225` not `@139`), so an assumed layout silently emits wrong values — a policy proven by
+  scanning against ground-truth anchors and bound to the client bytes is the only safe substrate.
+- Withholding a normalized value while retaining its raw keeps the artifact honest and valid in the
+  presence of CoA custom resources (unseen power types) without guessing their meaning — their live
+  resolution is deferred (M1.14G), the static substrate is proven here.
+- Transactional generations make regeneration collision-safe and every consumed byte re-validated,
+  so a half-written or drifted extract can never be silently consumed as canonical.

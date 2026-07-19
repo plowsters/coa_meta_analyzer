@@ -29,6 +29,13 @@ reports/meta/assets/guide-site-manifest.json
 # Claude Design reference materials (local design product, not part of the repo)
 design/
 
+# Build + scraper scratch that must never be tracked (accidentally added once; see Decision 23 commit).
+*.egg-info/
+coa_scraper/coa_builder_screenshots/
+coa_scraper/coa_scraper/
+coa_scraper/reports/tree_layout/
+reports/meta-m1-10-cd-smoke/
+
 # M1.14C client-derived factual outputs — regenerate from your own client (never committed)
 reports/client_extract/coa_client_spell.jsonl
 reports/client_extract/coa_client_spell_coa.jsonl
@@ -37,6 +44,18 @@ coa_scraper/dist/coa_mechanics.jsonl
 coa_scraper/dist/coa_mechanics.manifest.json
 coa_scraper/dist/coa_mechanics.fallback.jsonl
 coa_scraper/dist/coa_mechanics.fallback.manifest.json
+
+# M1.14E0 transactional client-extract generations, pointer, manifest, and the spell-mechanics recon
+# report — all client-derived; regenerate from your own client (never committed). The tracked
+# coa_client_extract/data/spell_layout_v1.json policy IS committed (it embeds only hashes + evidence).
+reports/client_extract/gen-*/
+coa_scraper/dist/gen-*/
+reports/client_extract/coa_client_extract.pointer.json
+coa_scraper/dist/coa_client_extract.pointer.json
+reports/client_extract/coa_client_extract_manifest.json
+coa_scraper/dist/coa_client_extract_manifest.json
+reports/client_extract/coa_spell_mechanics_recon.json
+coa_scraper/dist/coa_spell_mechanics_recon.json
 
 # M1.14D client-derived WoW constants — regenerate from your own client (never committed).
 # The tracked reports/client_extract/wow_class_axis_adjudication.json is NOT ignored.
