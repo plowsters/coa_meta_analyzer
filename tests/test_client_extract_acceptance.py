@@ -34,9 +34,11 @@ def test_spell_805775_is_current_adrenal_venom(tmp_path):
     by_id = {r["spell_id"]: r for r in rows}
     assert 805775 in by_id, "spell 805775 not extracted"
     venom = by_id[805775]
+    assert venom["schema_version"] == "coa-client-spell-v2"
     assert "Adrenal Venom" in venom["name"]
     assert "Fang Venom" not in venom["name"]  # not the stale db value
-    assert venom["provenance"]["schema_match_confidence"] in ("high", "low")
+    assert venom["provenance"]["policy_sha256"]                 # v2: bound policy pinned in provenance
+    assert venom["mechanics"]["power_type"] == 3               # energy @41, per-value gate (in-domain)
     assert venom["coa_attribution"]["is_coa"] is True          # M1.14B fills attribution
     assert "coa" in venom["coa_attribution"]["modes"]
 
@@ -52,9 +54,9 @@ def test_spell_805775_is_current_adrenal_venom(tmp_path):
     assert venom["coa_attribution"]["archive_family"] == family_of(effective)
     # source_dbcs records every contributing table, and Spell's matches the effective archive
     assert venom["provenance"]["source_dbcs"]["Spell"] == effective
-    assert set(venom["provenance"]["source_dbcs"]) == {
-        "Spell", "SpellCastTimes", "SpellDuration", "SpellRange"
-    }
+    # v2 also reads SpellIcon for the icon join; every side table present on the real client is listed
+    assert {"Spell", "SpellCastTimes", "SpellDuration", "SpellRange", "SpellIcon"} <= set(
+        venom["provenance"]["source_dbcs"])
 
 
 @pytest.mark.skipif(not CLIENT_ROOT.is_dir(), reason="Ascension client not installed at COA_CLIENT_ROOT")

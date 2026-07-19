@@ -4,18 +4,10 @@ import { normalizeSchoolMask, normalizePowerType, isPresent } from "./mechanics-
 
 export class MechanicsBuildError extends Error {}
 
-// Which client DBC tables each populated client mechanics field depends on (must all be "high").
-const FIELD_TABLES = {
-  cast_time_ms: ["Spell", "SpellCastTimes"],
-  duration_ms: ["Spell", "SpellDuration"],
-  range_max_yd: ["Spell", "SpellRange"],
-  school_mask: ["Spell"],
-  power_type: ["Spell"],
-};
-
 const NUMERIC_FIELDS = ["cast_time_ms", "duration_ms", "range_min_yd", "range_max_yd"];
-const INT_FIELDS = ["school_mask", "power_type", "category", "spell_icon_id"];
-const CONF = new Set(["high", "low"]);
+const INT_FIELDS = ["school_mask", "power_type", "spell_icon_id"];   // v2 omits category
+// Populated numeric mechanics values whose observation must agree (proof-authoritative consistency).
+const OBSERVED_FIELDS = ["cast_time_ms", "duration_ms", "range_min_yd", "range_max_yd", "school_mask", "power_type", "spell_icon_id"];
 
 function isNumOrNull(v) { return v === null || v === undefined || (typeof v === "number" && Number.isFinite(v)); }
 function isIntOrNull(v) { return v === null || v === undefined || Number.isInteger(v); }
@@ -25,25 +17,26 @@ function parseJson(text, what) {
   catch (e) { throw new MechanicsBuildError(`${what}: invalid JSON: ${e.message}`); }
 }
 
-// Throws on ANY malformed value that could reach a canonical artifact: wrong types, negative mask,
-// bad confidence enum, unknown mask bit / power enum, or per-table drift on a populated field (Spell
-// is foundational — name + every field depends on it). Runs BEFORE reconciliation.
+// The normalized value a field_observation exposes: an Envelope carries {decoded:{kind,value}}, a
+// JoinObservation carries {decoded:<number|null>}. Absence/withheld => null.
+function observationValue(o) {
+  if (!o) return undefined;
+  if (o.decoded && typeof o.decoded === "object") return o.decoded.value;
+  return o.decoded ?? null;
+}
+
+// v2: per-field/per-value observation proof is authoritative (the table-level
+// schema_match_confidence_by_dbc certification is retired). Throws on any malformed value that could
+// reach a canonical artifact: wrong types, negative/unknown mask, unknown power enum, or a populated
+// normalized value that disagrees with its field_observation. Runs BEFORE reconciliation.
 function assertRecordSemantics(rec) {
-  if (typeof rec.name !== "string") throw new MechanicsBuildError(`projection ${rec.spell_id}: name must be a string`);
+  if (rec.name !== null && typeof rec.name !== "string") throw new MechanicsBuildError(`projection ${rec.spell_id}: name must be string|null`);
   const m = rec.mechanics || {};
   for (const f of NUMERIC_FIELDS) if (!isNumOrNull(m[f])) throw new MechanicsBuildError(`projection ${rec.spell_id}: ${f} must be number|null`);
   for (const f of INT_FIELDS) if (!isIntOrNull(m[f])) throw new MechanicsBuildError(`projection ${rec.spell_id}: ${f} must be integer|null`);
   if (isPresent(m.school_mask) && (!Number.isInteger(m.school_mask) || m.school_mask < 0)) {
     throw new MechanicsBuildError(`projection ${rec.spell_id}: school_mask must be a non-negative integer`);
   }
-
-  const byDbc = rec.provenance?.schema_match_confidence_by_dbc;
-  const tables = ["Spell", "SpellCastTimes", "SpellDuration", "SpellRange"];
-  if (!byDbc || tables.some((t) => !CONF.has(byDbc[t]))) {
-    throw new MechanicsBuildError(`projection ${rec.spell_id}: schema_match_confidence_by_dbc must map ${tables} to high|low`);
-  }
-  if (byDbc.Spell !== "high") throw new MechanicsBuildError(`projection ${rec.spell_id}: Spell table drift (name + all fields unreliable)`);
-
   if (isPresent(m.school_mask) && m.school_mask > 0) {
     const { unknownBits } = normalizeSchoolMask(m.school_mask);
     if (unknownBits.length) throw new MechanicsBuildError(`projection ${rec.spell_id}: unknown school-mask bits ${unknownBits}`);
@@ -51,10 +44,13 @@ function assertRecordSemantics(rec) {
   if (isPresent(m.power_type) && normalizePowerType(m.power_type).unknown) {
     throw new MechanicsBuildError(`projection ${rec.spell_id}: unknown power_type ${m.power_type}`);
   }
-  for (const [field, needs] of Object.entries(FIELD_TABLES)) {
-    if (!isPresent(m[field])) continue;
-    const bad = needs.find((t) => byDbc[t] !== "high");
-    if (bad) throw new MechanicsBuildError(`projection ${rec.spell_id}: table ${bad} drift on populated field ${field}`);
+  // Every populated numeric normalized value must have an eligible matching observation.
+  const fobs = rec.field_observations || {};
+  for (const f of OBSERVED_FIELDS) {
+    if (!isPresent(m[f])) continue;
+    if (!(f in fobs)) throw new MechanicsBuildError(`projection ${rec.spell_id}: ${f} populated but has no field_observation`);
+    const ov = observationValue(fobs[f]);
+    if (ov !== m[f]) throw new MechanicsBuildError(`projection ${rec.spell_id}: ${f} normalized ${m[f]} disagrees with observation ${ov}`);
   }
 }
 
@@ -68,7 +64,10 @@ export function loadAndValidateProjection({ projectionPath, manifestPath, builde
 
   const manifestBytes = fs.readFileSync(manifestPath);
   const manifest = parseJson(manifestBytes.toString("utf8"), "projection manifest");
-  if (manifest.schema_version !== "coa-client-spell-projection-v1") {
+  if (manifest.schema_version === "coa-client-spell-projection-v1") {
+    throw new MechanicsBuildError("projection manifest is v1; regenerate with M1.14E (coa-client-spell-projection-v2)");
+  }
+  if (manifest.schema_version !== "coa-client-spell-projection-v2") {
     throw new MechanicsBuildError(`projection manifest bad schema_version: ${manifest.schema_version}`);
   }
   const p = manifest.projection;
@@ -92,7 +91,8 @@ export function loadAndValidateProjection({ projectionPath, manifestPath, builde
     lineNo += 1;
     if (!line.trim()) continue;
     const rec = parseJson(line, `projection line ${lineNo}`);
-    if (rec.schema_version !== "coa-client-spell-v1") throw new MechanicsBuildError(`projection row bad schema_version: ${rec.schema_version}`);
+    if (rec.schema_version === "coa-client-spell-v1") throw new MechanicsBuildError(`projection row ${rec.spell_id}: v1 schema; regenerate with M1.14E (coa-client-spell-v2)`);
+    if (rec.schema_version !== "coa-client-spell-v2") throw new MechanicsBuildError(`projection row bad schema_version: ${rec.schema_version}`);
     if (rec.coa_attribution?.is_coa !== true) throw new MechanicsBuildError(`projection row not is_coa: ${rec.spell_id}`);
     if (!Number.isInteger(rec.spell_id) || rec.spell_id <= 0) throw new MechanicsBuildError(`projection non-positive-integer spell_id: ${rec.spell_id}`);
     if (seen.has(rec.spell_id)) throw new MechanicsBuildError(`projection duplicate spell_id: ${rec.spell_id}`);

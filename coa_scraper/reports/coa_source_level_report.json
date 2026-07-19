@@ -251,30 +251,6 @@
   "class_pool_unknown_level_samples": [
     {
       "class_name": "Barbarian",
-      "entry_id": 29783,
-      "spell_id": 802792,
-      "name": "Jawbreaker"
-    },
-    {
-      "class_name": "Barbarian",
-      "entry_id": 29793,
-      "spell_id": 804137,
-      "name": "Headhunter's Spear"
-    },
-    {
-      "class_name": "Barbarian",
-      "entry_id": 29803,
-      "spell_id": 560906,
-      "name": "First Blood"
-    },
-    {
-      "class_name": "Barbarian",
-      "entry_id": 29608,
-      "spell_id": 706354,
-      "name": "Face Smasher"
-    },
-    {
-      "class_name": "Barbarian",
       "entry_id": 34276,
       "spell_id": 561322,
       "name": "Bellowing Voice"
@@ -329,6 +305,18 @@
     },
     {
       "class_name": "Barbarian",
+      "entry_id": 30162,
+      "spell_id": 804139,
+      "name": "Maiming Spear"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29608,
+      "spell_id": 706354,
+      "name": "Face Smasher"
+    },
+    {
+      "class_name": "Barbarian",
       "entry_id": 30762,
       "spell_id": 500918,
       "name": "Ancestral Roar"
@@ -353,9 +341,21 @@
     },
     {
       "class_name": "Barbarian",
-      "entry_id": 30162,
-      "spell_id": 804139,
-      "name": "Maiming Spear"
+      "entry_id": 29783,
+      "spell_id": 802792,
+      "name": "Jawbreaker"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29793,
+      "spell_id": 804137,
+      "name": "Headhunter's Spear"
+    },
+    {
+      "class_name": "Barbarian",
+      "entry_id": 29803,
+      "spell_id": 560906,
+      "name": "First Blood"
     },
     {
       "class_name": "Barbarian",

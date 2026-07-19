@@ -1,6 +1,6 @@
 {
   "schema_version": "coa-artifact-manifest-v1",
-  "generated_at": "2026-07-04T20:54:58.727Z",
+  "generated_at": "2026-07-13T16:31:32.268Z",
   "builder": {
     "id": 39,
     "slug": "voljin-alpha",
@@ -45,8 +45,13 @@
     },
     {
       "path": "scripts/lib/ascensiondb.mjs",
-      "bytes": 6917,
-      "sha256": "6a4a65b092122f7fc8d22faf14739236b7446ec2d58456a30318b9cacbd882ed"
+      "bytes": 13961,
+      "sha256": "4c1d6d2cf6e3d5f489b0518ef1aa9a614d890ab0efcc9cc7b154564e4da4aeb0"
+    },
+    {
+      "path": "scripts/lib/ascensiondb-cache.mjs",
+      "bytes": 6799,
+      "sha256": "28ea78492c50630ac548c5acf5eed4d7747a730652c372e8c61a689571a3caa8"
     },
     {
       "path": "scripts/lib/capture-options.mjs",
@@ -54,9 +59,19 @@
       "sha256": "391d804034d21be455c36e288177367adb987a20935799eb805d064ac09885c6"
     },
     {
+      "path": "scripts/lib/icon-assets.mjs",
+      "bytes": 6817,
+      "sha256": "cc701d4fa075770c5bfe6bf8b1aea8b2de3d155cebc2de4216d5f23a3ed61e8f"
+    },
+    {
       "path": "scripts/lib/source-level.mjs",
       "bytes": 3333,
       "sha256": "75aa1c6817f07d6b626e95a8874015edd40aaf5808a4485838253bc4adbe810f"
+    },
+    {
+      "path": "scripts/enrich-ascensiondb-assets.mjs",
+      "bytes": 12004,
+      "sha256": "4d3346fb118447385a96fc9feb4579687fb7e3dff7af2ff2179434ba331fa213"
     },
     {
       "path": "scripts/enrich-ascensiondb.mjs",
@@ -67,6 +82,16 @@
       "path": "scripts/apply-db-enrichment.mjs",
       "bytes": 1792,
       "sha256": "fc8fd752bc63b20b41aa227aac7ce5baa6c4bc8e449c03828955f5e37c1c4a60"
+    },
+    {
+      "path": "scripts/enrich-linked-items.mjs",
+      "bytes": 2061,
+      "sha256": "00dfeae60be453230430247a05c8bc757c107a413af27f5b04e45c544d0d801d"
+    },
+    {
+      "path": "scripts/build-mechanics-artifacts.mjs",
+      "bytes": 10395,
+      "sha256": "df2a0ca530e3e164175698c9bb7fa2fd466baac02f3dbd44cac5bd337bb9a053"
     },
     {
       "path": "scripts/write-source-level-report.mjs",
@@ -80,8 +105,8 @@
     },
     {
       "path": "scripts/write-artifact-manifest.mjs",
-      "bytes": 3663,
-      "sha256": "534c42f2e8e773590c0ef9a3f4d979628d9bb6efa75baa367f3ddebfffe4338d"
+      "bytes": 4293,
+      "sha256": "a6a072c1132d7f54225d7c954703cc14f610864b5d5a18790432c19d4f545e46"
     },
     {
       "path": "scripts/run-normalization-pipeline.mjs",
@@ -92,28 +117,28 @@
   "artifacts": [
     {
       "path": "data/coa.har",
-      "bytes": 14032138,
-      "sha256": "1e85cf1beaa82b32ef4a6a9065526158e2c8db014e54a8d60d42010c3bc9da44"
+      "bytes": 14029348,
+      "sha256": "488ba3cc865265054b0cb9ab700d87d11ead8594e1e77ba741a1a2560658b7b1"
     },
     {
       "path": "data/snapshots/final-page-content.html",
-      "bytes": 11997516,
-      "sha256": "32edcc1125d96485c3b60aba97d508f4b7689f7552c5c4ccbc0ec8c97df0ceca"
+      "bytes": 12007310,
+      "sha256": "f9e9c7b2b037a204aa515807c19ddb78202975b98bd936a7a850b293a4b00b5a"
     },
     {
       "path": "data/snapshots/final-runtime-dump.json",
       "bytes": 1184,
-      "sha256": "937abc1e21d5bf3a6f693a51ea8b38f09c1248181dc23d978a555e4e9c6c88b4"
+      "sha256": "b56d90321b9a281cef4abef2e12f8ef736e1c52650214b2fe877d16b27b58a49"
     },
     {
       "path": "reports/next_flight_stream.txt",
-      "bytes": 9198738,
-      "sha256": "252c59f7b95bb03b1bb195b68abf66704cb204d26ecb79842bc17b3b8afe9c75"
+      "bytes": 9206158,
+      "sha256": "721f3d4e60b9aa1f89b2c8c85ddd2038e722ad5eed552865f1bb3223504457e5"
     },
     {
       "path": "reports/coa_builder_payload.json",
-      "bytes": 6828948,
-      "sha256": "abbf2dd3c8e340e8a584a29b6b761118208dc2fa4789edf012001a381a557c7e"
+      "bytes": 6829911,
+      "sha256": "e9387326b514a82fcd7494875ea33cf9c0f31d636cafd1d5411eaaf213ca1891"
     },
     {
       "path": "reports/coa_builder_summary.json",
@@ -122,13 +147,13 @@
     },
     {
       "path": "reports/coa_payload_shape.json",
-      "bytes": 1163209,
-      "sha256": "42f78ed97109434c7feb0b2f9f3a106cb9a8a16998e95a3ce378e89b055fcaf7"
+      "bytes": 1162879,
+      "sha256": "7339b1fc1720b85590bb5dbc9144cd4f7f4fbf27298822a400ae48e7ecd097ed"
     },
     {
       "path": "reports/coa_payload_shape_report.txt",
-      "bytes": 406343,
-      "sha256": "f8d7e39f2f13442146d76cb492238af28be243d2e3bbcd210e66560de676e35a"
+      "bytes": 406013,
+      "sha256": "8943dc42b71c4fc81fd08274f174ce83282772c9f5a153e267c926552919538b"
     },
     {
       "path": "reports/coa_payload_report.txt",
@@ -153,7 +178,7 @@
     {
       "path": "reports/coa_source_level_report.json",
       "bytes": 9251,
-      "sha256": "e03a228b65e12e2ab41299275af71b5470b55c4ad543ae7ba223d54eaf40f953"
+      "sha256": "f6fb7e9f2be726263f3c0f7aff25d5b35f9c8a2e55f747ed68f51946a891a7aa"
     },
     {
       "path": "reports/coa_metadata_tab_report.json",
@@ -162,18 +187,38 @@
     },
     {
       "path": "reports/coa_db_enrichment_summary.json",
-      "bytes": 417,
-      "sha256": "65fef305e3051a4f7908a24f3bea9d8c135bf10ea9b9e1c1fda2018f7b2bad30"
+      "bytes": 414,
+      "sha256": "c6533ca3a796bec708defc325a5a426161b57df35a9883072f0091530cabe85b"
+    },
+    {
+      "path": "reports/coa_item_enrichment_summary.json",
+      "bytes": 340,
+      "sha256": "3f02dcd4af1003ed8aa658e2c9ee27a200d2a437eb5d0190ab6191c74b9475fd"
+    },
+    {
+      "path": "reports/coa_ascensiondb_cache_manifest.json",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/reports/coa_ascensiondb_cache_manifest.json"
+    },
+    {
+      "path": "reports/coa_ascensiondb_cache_summary.json",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/reports/coa_ascensiondb_cache_summary.json"
+    },
+    {
+      "path": "reports/coa_mechanics_enrichment_summary.json",
+      "bytes": 362,
+      "sha256": "952ccb81052a66340a910cae095e72a25d27f00a6be33b841ecba7d794288507"
     },
     {
       "path": "dist/coa_entries.jsonl",
-      "bytes": 14107098,
-      "sha256": "a5833f15caebb561e6e234ed22596f494440c5b98925f2e8ff0cb0bd97b1d50c"
+      "bytes": 14108909,
+      "sha256": "b2d65aa2e6e24aa391fd27d8b6f864a6ee6e148a08890641676d5d5cf58f3e3c"
     },
     {
       "path": "dist/coa_entries.pretty.json",
-      "bytes": 18310645,
-      "sha256": "98b98b8978045784ee506453b167c455e8060616174a735777acceb3512a7969"
+      "bytes": 18312556,
+      "sha256": "744d6686855a1d9cdc4d1bb5663598e22e17da7174b8791920f781f6e902b881"
     },
     {
       "path": "dist/coa_classes.json",
@@ -187,18 +232,53 @@
     },
     {
       "path": "dist/coa_class_profile_input.json",
-      "bytes": 3017462,
-      "sha256": "8b14a4cc79e3c5b6335b070b31c4ba5731bb8e37b3dc6f60419093f18cdc08f2"
+      "bytes": 3018017,
+      "sha256": "491433291c47bb45761da029ab74ef73351ad8f2993db01a0a70861dd9217ed9"
+    },
+    {
+      "path": "dist/coa_db_spell_records.jsonl",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/dist/coa_db_spell_records.jsonl"
     },
     {
       "path": "dist/coa_db_spell_tooltips.jsonl",
-      "bytes": 6069622,
-      "sha256": "880d812a1b6b487ac84d535b3e95cd393b1e20aecad18f1b07966fb8bb009118"
+      "bytes": 7028506,
+      "sha256": "d9d40d527f8bceb36b1e1d8f8199f5489c653f19710212437008206a71abad33"
+    },
+    {
+      "path": "dist/coa_db_item_records.jsonl",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/dist/coa_db_item_records.jsonl"
+    },
+    {
+      "path": "dist/coa_db_item_tooltips.jsonl",
+      "bytes": 1252,
+      "sha256": "6fa67f046170a649ff28c264cdd59ec24b6a5554e549bfb35faaee912f36a9d7"
+    },
+    {
+      "path": "dist/coa_db_effect_records.jsonl",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/dist/coa_db_effect_records.jsonl"
+    },
+    {
+      "path": "dist/coa_db_asset_records.jsonl",
+      "missing": true,
+      "note": "Required file does not exist: /home/archbug/projects/coacodex/coa_scraper/dist/coa_db_asset_records.jsonl"
     },
     {
       "path": "dist/coa_entries.enriched.jsonl",
-      "bytes": 17720688,
-      "sha256": "637810d250e347cb801a1b7c39589c7b331bd86314a03dc53f1f24c96b6ab4b5"
+      "bytes": 17685265,
+      "sha256": "f1ab5072cf40bcd48aec60699bd1963eb2289fbe075519b8c8ba1b37c987dd45"
+    },
+    {
+      "path": "dist/coa_mechanics.jsonl",
+      "bytes": 2805368,
+      "sha256": "965d9dc4c06535c86c0aff51c3b177355946a3367b8c7f291d8593b2408ead21"
+    },
+    {
+      "path": "dist/coa_items.jsonl",
+      "bytes": 763,
+      "sha256": "4917566293bc91e9fd21eaea75cbfe2610e6e792c386c13a2a88ef7f4e0db647"
     }
   ],
   "validation": {

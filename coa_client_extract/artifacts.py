@@ -7,80 +7,6 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from .archive_plan import family_of
-from .wdbc import DbcTable
-
-# Spell ids at or above this floor are custom high-range content; below it is stock
-# 3.3.5a/base-game range. A coarse, purely mechanical magnitude band — a raw attribution
-# signal only. M1.14B owns the actual id-range attribution policy.
-_CUSTOM_ID_FLOOR = 100_000
-
-
-def _index_lookup(table: DbcTable | None, value_key: str) -> dict[int, int]:
-    if table is None:
-        return {}
-    return {row["id"]: row[value_key] for row in table.rows}
-
-
-def _table_conf(table: DbcTable | None) -> str:
-    """A contributing side-table is 'high' only if present and drift-free; absent or drifted is 'low'."""
-    if table is None or table.drift:
-        return "low"
-    return "high"
-
-
-def build_client_spell_records(
-    spell: DbcTable,
-    cast_times: DbcTable | None,
-    durations: DbcTable | None,
-    ranges: DbcTable | None,
-    *,
-    provenance: dict,
-) -> list[dict]:
-    cast_by_idx = _index_lookup(cast_times, "base_ms")
-    dur_by_idx = _index_lookup(durations, "base_ms")
-    range_max = {row["id"]: row.get("max_yd") for row in ranges.rows} if ranges else {}
-    range_min = {row["id"]: row.get("min_yd") for row in ranges.rows} if ranges else {}
-
-    # The whole Spell table is supplied by one effective archive, so its family is a
-    # record-independent raw signal recorded on every row for M1.14B to consume.
-    effective = provenance.get("effective_archive", "")
-    archive_family = family_of(effective) if effective else "unknown"
-
-    records: list[dict] = []
-    for row in spell.rows:
-        mechanics = {
-            "school_mask": row.get("school_mask"),
-            "power_type": row.get("power_type"),
-            "cast_time_ms": cast_by_idx.get(row.get("casting_time_index")),
-            "duration_ms": dur_by_idx.get(row.get("duration_index")),
-            "range_min_yd": range_min.get(row.get("range_index")),
-            "range_max_yd": range_max.get(row.get("range_index")),
-            "category": row.get("category"),
-            "spell_icon_id": row.get("spell_icon_id"),
-        }
-        records.append({
-            "schema_version": "coa-client-spell-v1",
-            "spell_id": row["id"],
-            "name": row.get("name", ""),
-            "mechanics": mechanics,
-            "provenance": {
-                **provenance,
-                "schema_match_confidence": "low" if spell.drift else "high",
-                "schema_match_confidence_by_dbc": {
-                    "Spell": "low" if spell.drift else "high",
-                    "SpellCastTimes": _table_conf(cast_times),
-                    "SpellDuration": _table_conf(durations),
-                    "SpellRange": _table_conf(ranges),
-                },
-            },
-            "coa_attribution": {
-                "status": "unknown",  # M1.14A records raw signals; M1.14B decides
-                "archive_family": archive_family,
-                "id_range": "high" if row["id"] >= _CUSTOM_ID_FLOOR else "base",
-            },
-        })
-    return records
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -217,18 +143,21 @@ def write_client_spell_projection(
     body = "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in projected).encode("utf-8")
     proj_sha = _sha256_bytes(body)
 
+    # v2: per-field/per-value observation proof is authoritative — table-level confidence is no longer
+    # a field certification. Summarize instead how many projected rows withheld a normalized value for
+    # an out-of-domain symbol (raw retained), from the field_observations block.
     by_conf: dict[str, int] = {}
-    by_dbc_low = 0
+    withheld = 0
     for r in projected:
         c = r.get("coa_attribution", {}).get("confidence", "low")
         by_conf[c] = by_conf.get(c, 0) + 1
-        vals = r.get("provenance", {}).get("schema_match_confidence_by_dbc", {}).values()
-        if any(v != "high" for v in vals):
-            by_dbc_low += 1
+        fobs = r.get("field_observations", {})
+        if any(isinstance(o, dict) and o.get("decoded_reason") == "value_out_of_domain" for o in fobs.values()):
+            withheld += 1
 
     manifest = {
-        "schema_version": "coa-client-spell-projection-v1",
-        "inclusion_rule": {"predicate": "coa_attribution.is_coa == true", "version": "m1.14c-1"},
+        "schema_version": "coa-client-spell-projection-v2",
+        "inclusion_rule": {"predicate": "coa_attribution.is_coa == true", "version": "m1.14e-1"},
         "source_artifact": {"path": source_path, "sha256": source_sha, "byte_length": source_bytes},
         "projection": {"path": proj_path.name, "sha256": proj_sha, "byte_length": len(body)},
         "client_build": client_build,
@@ -237,8 +166,8 @@ def write_client_spell_projection(
         "counts": {"source_records": len(records), "projected_records": len(projected),
                    "unique_spell_ids": len(set(spell_ids)),
                    "by_confidence": by_conf},
-        "schema_confidence_summary": {"records_with_any_low_table": by_dbc_low,
-                                      "records_all_high": len(projected) - by_dbc_low},
+        "value_gate_summary": {"records_with_withheld_value": withheld,
+                               "records_all_in_domain": len(projected) - withheld},
     }
     manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 

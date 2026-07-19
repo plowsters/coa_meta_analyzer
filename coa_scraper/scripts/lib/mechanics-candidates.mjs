@@ -1,25 +1,11 @@
 import { isPresent, normalizeSchoolMask, normalizePowerType, normalizeDurationMs } from "./mechanics-normalize.mjs";
 import { REASON } from "./mechanics-reconcile.mjs";
 
-// Which client DBC tables each field depends on (all must be "high" for client eligibility).
-const CLIENT_TABLES = {
-  cast_time_ms: ["Spell", "SpellCastTimes"],
-  duration_ms: ["Spell", "SpellDuration"],
-  range_yards: ["Spell", "SpellRange"],
-  schools: ["Spell"],
-  power_type: ["Spell"],
-};
-
 // The real client Spell-family column each mechanics field is sourced from (for candidate source_field).
 const CLIENT_SOURCE_FIELD = {
   cast_time_ms: "cast_time_ms", duration_ms: "duration_ms", range_yards: "range_max_yd",
   schools: "school_mask", power_type: "power_type",
 };
-
-function clientTablesHigh(clientRec, field) {
-  const byDbc = clientRec?.provenance?.schema_match_confidence_by_dbc || {};
-  return (CLIENT_TABLES[field] || []).every((t) => byDbc[t] === "high");
-}
 
 function clientNormalized(clientRec, field) {
   const m = clientRec?.mechanics || {};
@@ -67,8 +53,10 @@ export function fieldCandidates({ field, clientRec, builderNodes, dbRow, dbExclu
   if (clientRec) {
     const { raw, value, unknownBits, unknown } = clientNormalized(clientRec, field);
     const reasons = [];
+    // v2: the client value is already per-field/per-value proof-gated at extraction (an unproven or
+    // out-of-domain value was withheld to null), so a present value is eligible. The unknown-bit/enum
+    // guards remain as defensive belt-and-suspenders.
     let eligible = value !== null && value !== undefined;
-    if (eligible && !clientTablesHigh(clientRec, field)) { eligible = false; reasons.push(REASON.CLIENT_TABLE_DRIFT); }
     if (unknownBits && unknownBits.length) { eligible = false; reasons.push(REASON.UNKNOWN_MASK_BIT); }
     if (unknown) { eligible = false; reasons.push(REASON.UNKNOWN_ENUM); }
     out.push({

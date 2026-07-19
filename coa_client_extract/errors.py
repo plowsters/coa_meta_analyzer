@@ -21,3 +21,9 @@ class DbcSemanticError(ExtractError):
     """A DBC column layout matched its WDBC header but failed semantic validation
     (foreign keys, adjacency domain, or value ranges). Distinct from DbcDriftError,
     which is a structural header mismatch."""
+
+
+class ClientBindingError(ExtractError):
+    """The spell-layout policy is not reviewed, or its `bound` client bytes/build do not match the
+    opened client. Canonical v2 emission fails closed (CLI exit 3) rather than promote values proven
+    against a different client."""

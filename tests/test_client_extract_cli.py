@@ -45,10 +45,54 @@ def _ca_tables():
     return ca, ct, tt, ess, sla
 
 
+_SPELL_STRINGS = b"\x00Adrenal Venom\x00"
+_SPELL_BYTES = struct.pack("<4sIIII", b"WDBC", 1, 4, 16, len(_SPELL_STRINGS)) + \
+    struct.pack("<IIII", 805775, 1, 3, 5) + _SPELL_STRINGS
+
+
+def _bound_spell_policy(client_build="3.3.5a+patch-C"):
+    """A reviewed policy bound to the fake Spell.dbc bytes so regenerate's client-binding hold passes.
+    Spell fixture is 4 cells (id@0, name@1, casting_time_index@2, duration_index@3); power_type and
+    school_mask are absent from the fixture, so they carry null cells (emitted as unresolved)."""
+    import hashlib
+    from coa_client_extract.spell_layout import compute_policy_sha256, load_spell_policy
+
+    def f(cell, kind, layout, interp, promo):
+        return {"cell": cell, "kind": kind, "layout": layout, "interpretation": interp,
+                "promotion": promo, "evidence": "cli fixture"}
+
+    V = ("verified", "verified")
+    tables = {
+        "Spell": {"expected_field_count": 4, "fields": {
+            "id": f(0, "uint32", *V, "normalized"), "name": f(1, "string", *V, "normalized"),
+            "power_type": f(None, "int32", "unproven", "unproven", "raw_only"),
+            "school_mask": f(None, "uint32", "unproven", "unproven", "raw_only"),
+            "casting_time_index": f(2, "uint32", *V, "raw_only"),
+            "duration_index": f(3, "uint32", *V, "raw_only")}},
+        "SpellCastTimes": {"expected_field_count": 2, "fields": {
+            "id": f(0, "uint32", *V, "raw_only"), "base_ms": f(1, "int32", *V, "raw_only")}},
+        "SpellDuration": {"expected_field_count": 2, "fields": {
+            "id": f(0, "uint32", *V, "raw_only"), "base_ms": f(1, "int32", *V, "raw_only")}},
+    }
+    joins = {
+        "cast_time_ms": {"index_field": "casting_time_index", "side_table": "SpellCastTimes", "side_value_field": "base_ms"},
+        "duration_ms": {"index_field": "duration_index", "side_table": "SpellDuration", "side_value_field": "base_ms"},
+    }
+    enum = {"power_types": [-2, 0, 1, 2, 3, 4, 5, 6], "school_bits": [1, 2, 4, 8, 16, 32, 64]}
+    enum["sha256"] = compute_policy_sha256(enum)
+    anchors = {"spells": [{"id": 133, "name": "Fireball", "power_type": 0, "school_mask": 4}]}
+    anchors["sha256"] = compute_policy_sha256(anchors)
+    p = {"schema_version": "coa-spell-layout-v1", "reviewed": True,
+         "bound": {"client_build": client_build,
+                   "source_dbc_sha256": {"Spell": hashlib.sha256(_SPELL_BYTES).hexdigest()}},
+         "required_tables": ["Spell"], "expected_absent": [], "enum_policy": enum,
+         "anchor_set": anchors, "tables": tables, "joins": joins}
+    p["sha256"] = compute_policy_sha256(p)
+    return load_spell_policy(p)
+
+
 def _fake_backend():
     import struct
-    strings = b"\x00Adrenal Venom\x00"
-    spell = struct.pack("<IIII", 805775, 1, 3, 5)
     cast = struct.pack("<II", 3, 1500)
     dur = struct.pack("<II", 5, 18000)
 
@@ -56,7 +100,7 @@ def _fake_backend():
         return struct.pack("<4sIIII", b"WDBC", len(rows), fc, rs, len(s)) + b"".join(rows) + s
 
     entries = {
-        "DBFilesClient\\Spell.dbc": [(Path("common.MPQ"), dbc([spell], 4, 16, strings))],
+        "DBFilesClient\\Spell.dbc": [(Path("common.MPQ"), _SPELL_BYTES)],
         "DBFilesClient\\SpellCastTimes.dbc": [(Path("common.MPQ"), dbc([cast], 2, 8))],
         "DBFilesClient\\SpellDuration.dbc": [(Path("common.MPQ"), dbc([dur], 2, 8))],
         "DBFilesClient\\SpellRange.dbc": [(Path("common.MPQ"), dbc([struct.pack("<I", 1) + b"\x00" * 152], 39, 156))],
@@ -95,8 +139,10 @@ def test_regenerate_writes_artifacts_with_injected_backend(tmp_path):
     # Inject synthetic layouts matching the fake backend's DBC bytes; real layouts are
     # exercised by the Task 10 acceptance test. Asserts orchestration end to end.
     out = tmp_path / "out"
-    manifest = regenerate(_client(tmp_path), out, backend=_fake_backend(), layouts=_synthetic_layouts())
+    manifest = regenerate(_client(tmp_path), out, backend=_fake_backend(),
+                          layouts=_synthetic_layouts(), spell_policy=_bound_spell_policy())
     assert manifest["schema_version"] == "coa-client-extract-manifest-v1"
+    assert manifest["unknown_symbol_inventory"] == {"power_type": [], "school_bits": []}
     assert (out / "coa_client_spell.jsonl").is_file()
     assert (out / "coa_client_content.jsonl").is_file()
     assert (out / "coa_client_archive_plan.json").is_file()

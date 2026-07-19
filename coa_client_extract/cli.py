@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .archive_backend import ArchiveBackend
 from .archive_plan import ArchivePlan, discover_plan, validate_load_order
-from .artifacts import build_client_spell_records, write_json, write_jsonl
+from .artifacts import write_json, write_jsonl
 from .class_types import resolve_class_types, resolve_tab_types
 from .content_json import read_content_records
 from .decode_advancement import decode_layout, write_report
@@ -30,26 +30,50 @@ def regenerate(
     backend: ArchiveBackend | None = None,
     stormlib_path: str | None = None,
     layouts: dict[str, DbcLayout] | None = None,
+    spell_policy=None,
     builder_entries_path: str | None = None,
     ca_decode_report: str | None = None,
     client_only_adjudication_path: str | None = None,
 ) -> dict:
+    import hashlib
+    from .recordview import open_view
+    from .spell_layout import load_default_policy
+    from .spell_v2 import build_spell_v2_records
+    from .errors import ClientBindingError
+
     if backend is None:
         from .stormlib_backend import StormLibBackend
         backend = StormLibBackend(stormlib_path=stormlib_path)  # may raise BackendUnavailable
 
     plan = discover_plan(client_root)
     layouts = layouts or SPELL_FAMILY
+    policy = spell_policy or load_default_policy()
     root, attach = plan.open_chain  # StormLib root + all base+patch archives attached on top
+    client_build = _client_build(plan)
 
-    def read_table(name: str):
-        member = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
-        return member, parse_dbc(member.data, layouts[name])
+    spell_member = backend.read_effective_file(root, attach, "DBFilesClient\\Spell.dbc")
 
-    spell_member, spell = read_table("Spell")
-    cast_member, cast = read_table("SpellCastTimes")
-    dur_member, dur = read_table("SpellDuration")
-    rng_member, rng = read_table("SpellRange")
+    # Client-binding hard hold: never promote values proven against a different client. The policy must
+    # be human-reviewed AND its bound Spell.dbc sha256 + client_build must match the opened client.
+    spell_sha = hashlib.sha256(spell_member.data).hexdigest()
+    bound = policy.bound or {}
+    if not policy.reviewed:
+        raise ClientBindingError("spell policy is not reviewed; refusing canonical v2 emission")
+    if bound.get("client_build") != client_build or bound.get("source_dbc_sha256", {}).get("Spell") != spell_sha:
+        raise ClientBindingError(
+            f"spell policy not bound to this client: policy bound={bound.get('client_build')!r} "
+            f"Spell={str(bound.get('source_dbc_sha256', {}).get('Spell'))[:12]}, "
+            f"opened build={client_build!r} Spell={spell_sha[:12]}")
+
+    # Side tables are read best-effort: an absent side table yields no view (its joins resolve to
+    # unresolved observations) and is simply not listed among the contributing source_dbcs.
+    side_members: dict[str, object] = {}
+    side_views: dict[str, object] = {}
+    for name in ("SpellCastTimes", "SpellDuration", "SpellRange", "SpellIcon"):
+        if backend.has_file(root, attach, f"DBFilesClient\\{name}.dbc"):
+            m = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
+            side_members[name] = m
+            side_views[name] = open_view(m.data)
 
     # Fail closed before writing canonical artifacts if the order StormLib applied disagrees
     # with the plan's declared load order for the canonical, CoA-overridden Spell table.
@@ -59,16 +83,14 @@ def regenerate(
         "base_archive": spell_member.base_archive.name,
         "patch_chain": [p.name for p in spell_member.patch_chain],
         "effective_archive": spell_member.effective_archive.name,
-        "source_dbcs": {
-            "Spell": spell_member.effective_archive.name,
-            "SpellCastTimes": cast_member.effective_archive.name,
-            "SpellDuration": dur_member.effective_archive.name,
-            "SpellRange": rng_member.effective_archive.name,
-        },
+        "source_dbcs": {"Spell": spell_member.effective_archive.name,
+                        **{n: m.effective_archive.name for n, m in side_members.items()}},
         "extraction_date": date.today().isoformat(),
     }
 
-    spell_records = build_client_spell_records(spell, cast, dur, rng, provenance=provenance)
+    spell_view = open_view(spell_member.data).require_dense()
+    spell_records, unknown_symbol_inventory = build_spell_v2_records(
+        spell_view, side_views, policy=policy, provenance=provenance)
     content_records = read_content_records(client_root / "Content")
 
     # --- advancement pipeline: read the CoA advancement graph, attribute spells, and prove parity ---
@@ -233,6 +255,10 @@ def regenerate(
         outputs=outputs,
         archive_plan=plan.to_dict(),
     )
+    # v2: the per-value domain gate's aggregate — unseen enum/bit symbols whose normalized value was
+    # withheld (raw retained). An empty inventory means every value fell inside the policy domain.
+    manifest["unknown_symbol_inventory"] = unknown_symbol_inventory
+    manifest["spell_policy_sha256"] = policy.sha256
     write_json(manifest, out_dir / "coa_client_extract_manifest.json")
     return manifest
 
@@ -339,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "regenerate":
+        from .errors import ClientBindingError
         try:
             regenerate(
                 args.client_root, args.out, stormlib_path=args.stormlib,
@@ -348,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
         except BackendUnavailable as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
+        except ClientBindingError as exc:
+            print(f"error: client-binding hard hold: {exc}", file=sys.stderr)
+            return 3
         return 0
     if args.command == "decode-advancement":
         try:

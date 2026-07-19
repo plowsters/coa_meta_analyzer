@@ -821,16 +821,19 @@ test("fieldCandidates: client cast_time 0 is present (missing != zero), db exclu
   assert(!db || db.eligible === false);
 });
 
-test("fieldCandidates: client cast_time ineligible when SpellCastTimes drifted", () => {
+test("fieldCandidates: v2 withheld (null) client field yields no eligible client candidate", () => {
+  // v2 withholds an unproven/out-of-domain value to null at extraction; a null client value is simply
+  // not eligible (no table-drift eligibility reason exists anymore — drift fails the extract closed).
   const clientRec = {
-    mechanics: { cast_time_ms: 1500 },
-    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "low", SpellDuration: "high", SpellRange: "high" } },
+    mechanics: { cast_time_ms: null },
     coa_attribution: { confidence: "high" }, spell_id: 7,
   };
   const cands = fieldCandidates({ field: "cast_time_ms", clientRec, builderNodes: [], dbRow: null, dbExcluded: false });
   const client = cands.find((c) => c.source === "client_dbc");
   assert.equal(client.eligible, false);
-  assert(client.eligibility_reasons.includes("client_table_drift"));
+  // a populated client value, by contrast, is eligible by construction (already proof-gated)
+  const ok = fieldCandidates({ field: "cast_time_ms", clientRec: { mechanics: { cast_time_ms: 1500 }, coa_attribution: { confidence: "high" }, spell_id: 7 }, builderNodes: [], dbRow: null, dbExcluded: false });
+  assert.equal(ok.find((c) => c.source === "client_dbc").eligible, true);
 });
 
 test("buildMechanicsRows: one row per spell_id, client field wins, schools + field_provenance present", () => {
@@ -915,7 +918,7 @@ function writeProjectionFixture(dir, records) {
   const sha = crypto.createHash("sha256").update(body).digest("hex");
   const uniq = new Set(records.map((r) => r.spell_id)).size;
   fs.writeFileSync(man, JSON.stringify({
-    schema_version: "coa-client-spell-projection-v1",
+    schema_version: "coa-client-spell-projection-v2",
     projection: { path: "p.jsonl", sha256: sha, byte_length: Buffer.byteLength(body) },
     counts: { projected_records: records.length, unique_spell_ids: uniq, source_records: records.length },
     client_build: "test-client-build",
@@ -923,11 +926,19 @@ function writeProjectionFixture(dir, records) {
   return { proj, man };
 }
 
+const _proof = { integrity: "verified", layout: "verified", interpretation: "verified" };
+const _env = (v, kind = "int32") => ({ state: "present", raw_u32: v, decoded: { kind, value: v }, decoded_reason: "decoded", proof: _proof, evidence_ref: "fx" });
+const _join = (v) => ({ state: "resolved", components: {}, composed_proof: _proof, decoded: v, decoded_reason: "decoded" });
+
 function validProjRec(spell_id) {
   return {
-    schema_version: "coa-client-spell-v1", spell_id, name: `S${spell_id}`,
-    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, category: 0, spell_icon_id: 1 },
-    provenance: { schema_match_confidence_by_dbc: { Spell: "high", SpellCastTimes: "high", SpellDuration: "high", SpellRange: "high" } },
+    schema_version: "coa-client-spell-v2", spell_id, name: `S${spell_id}`,
+    mechanics: { school_mask: 8, power_type: 3, cast_time_ms: 0, duration_ms: 12000, range_min_yd: 0, range_max_yd: 30, spell_icon_id: 1 },
+    field_observations: {
+      school_mask: _env(8, "uint32"), power_type: _env(3, "int32"),
+      cast_time_ms: _join(0), duration_ms: _join(12000),
+      range_min_yd: _join(0), range_max_yd: _join(30), spell_icon_id: _join(1),
+    },
     coa_attribution: { is_coa: true, confidence: "high" },
   };
 }
@@ -950,14 +961,36 @@ test("loadAndValidateProjection: torn pair (only one file) throws even though it
   );
 });
 
-test("loadAndValidateProjection: per-table drift on a populated field throws", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "drift-"));
+test("loadAndValidateProjection: v2 normalized value disagreeing with its observation throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "consist-"));
   const rec = validProjRec(1);
-  rec.provenance.schema_match_confidence_by_dbc.SpellCastTimes = "low"; // cast_time_ms is populated (0)
+  rec.mechanics.cast_time_ms = 1500;            // observation still says decoded 0 -> inconsistent
   const { proj, man } = writeProjectionFixture(dir, [rec]);
   assert.throws(
     () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
-    /SpellCastTimes drift/,
+    /cast_time_ms normalized 1500 disagrees with observation 0/,
+  );
+});
+
+test("loadAndValidateProjection: a populated numeric field with no observation throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "noobs-"));
+  const rec = validProjRec(1);
+  delete rec.field_observations.power_type;     // power_type still populated (3)
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /power_type populated but has no field_observation/,
+  );
+});
+
+test("loadAndValidateProjection: a v1 projection row is rejected with a regenerate message", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "v1row-"));
+  const rec = validProjRec(1);
+  rec.schema_version = "coa-client-spell-v1";
+  const { proj, man } = writeProjectionFixture(dir, [rec]);
+  assert.throws(
+    () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
+    /v1 schema; regenerate with M1\.14E/,
   );
 });
 
@@ -1021,25 +1054,27 @@ test("loadAndValidateProjection: unknown power_type enum throws", () => {
   );
 });
 
-test("loadAndValidateProjection: confidence value outside {high,low} throws", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badconf-"));
-  const rec = validProjRec(1);
-  rec.provenance.schema_match_confidence_by_dbc.SpellDuration = "medium";
-  const { proj, man } = writeProjectionFixture(dir, [rec]);
+test("loadAndValidateProjection: a v1 projection manifest is rejected with a regenerate message", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "v1man-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  parsed.schema_version = "coa-client-spell-projection-v1";
+  fs.writeFileSync(man, JSON.stringify(parsed));
   assert.throws(
     () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
-    /must map .* to high\|low/,
+    /manifest is v1; regenerate with M1\.14E/,
   );
 });
 
-test("loadAndValidateProjection: low Spell confidence throws (name + every field unreliable)", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spelldrift-"));
-  const rec = validProjRec(1);
-  rec.provenance.schema_match_confidence_by_dbc.Spell = "low";
-  const { proj, man } = writeProjectionFixture(dir, [rec]);
+test("loadAndValidateProjection: an unknown projection manifest schema throws", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "badschema-"));
+  const { proj, man } = writeProjectionFixture(dir, [validProjRec(1)]);
+  const parsed = JSON.parse(fs.readFileSync(man, "utf8"));
+  parsed.schema_version = "coa-client-spell-projection-v9";
+  fs.writeFileSync(man, JSON.stringify(parsed));
   assert.throws(
     () => loadAndValidateProjection({ projectionPath: proj, manifestPath: man, builderSpellIds: new Set([1]) }),
-    /Spell table drift/,
+    /bad schema_version/,
   );
 });
 
@@ -1129,7 +1164,7 @@ test("acceptance: identity-mismatched db supplies zero fields AND zero db-derive
   // No client school and no builder tooltip → the ONLY thing that could produce an effect is the
   // db's "summon a pet" tooltip. Since the db row fails identity, it must be excluded → zero effects.
   const rec = validProjRec(7);
-  rec.mechanics.school_mask = 0;
+  rec.mechanics.school_mask = 0; rec.field_observations.school_mask = _env(0, "uint32");
   rec.mechanics.duration_ms = null;
   rec.mechanics.range_min_yd = null;
   rec.mechanics.range_max_yd = null;
