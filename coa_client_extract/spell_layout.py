@@ -87,6 +87,14 @@ class SpellPolicy:
     def anchors(self) -> list[dict]:
         return list(self.anchor_set["spells"])
 
+    @property
+    def anchor_sha256(self) -> str | None:
+        return self.anchor_set.get("sha256")
+
+    @property
+    def enum_sha256(self) -> str:
+        return compute_policy_sha256(self._enum)
+
 
 def _validate_field(table: str, name: str, spec: dict, field_count: int) -> FieldPolicy:
     for key in ("cell", "kind", "layout", "interpretation", "promotion", "evidence"):

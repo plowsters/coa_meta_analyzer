@@ -10,6 +10,7 @@ import { reconcileField, dbIdentityReference, applyDbIdentityGate, REASON } from
 import { fieldCandidates } from "./lib/mechanics-candidates.mjs";
 import { isPresent } from "./lib/mechanics-normalize.mjs";
 import { loadAndValidateProjection, MechanicsBuildError } from "./lib/mechanics-projection.mjs";
+import { resolveGeneration, GenerationResolveError } from "./lib/generation.mjs";
 
 const MECHANICS_SCHEMA_VERSION = "coa-mechanics-v1";
 
@@ -486,18 +487,46 @@ if (isCliEntryPoint()) {
   const has = (name) => args.includes(name);
   const entriesPath = flag("--builder-entries", "dist/coa_entries.jsonl");
   const dbPath = flag("--db-spells", "dist/coa_db_spell_tooltips.jsonl");
-  // npm runs scripts from coa_scraper/, but the extractor writes the projection to the REPO-ROOT
-  // reports/client_extract/ — so the default (and the npm scripts) reach it via ../reports/...
-  const projectionPath = flag("--projection", "../reports/client_extract/coa_client_spell_coa.jsonl");
-  const projManifestPath = flag("--projection-manifest", "../reports/client_extract/coa_client_spell_projection.manifest.json");
   const outDir = flag("--out", "dist");
+  const pointerPath = flag("--client-extract-pointer", null);
+  const allowFallbackFlag = has("--allow-fallback-mechanics");
   if (!fs.existsSync(entriesPath)) { console.error(`required builder entries missing: ${entriesPath}`); process.exit(2); }
+
+  // Producer publishes the pointer; the consumer REQUIRES it for a canonical run. The legacy fixed-path
+  // projection runs only under the existing --allow-fallback-mechanics degraded path.
+  let projectionPath, projManifestPath, allowFallback;
+  if (pointerPath) {
+    if (has("--projection") || has("--projection-manifest")) {
+      console.error("pass EITHER --client-extract-pointer OR --projection/--projection-manifest, not both");
+      process.exit(2);
+    }
+    try {
+      const resolved = resolveGeneration(pointerPath);
+      projectionPath = resolved.children["coa_client_spell_coa.jsonl"];
+      projManifestPath = resolved.children["coa_client_spell_projection.manifest.json"];
+    } catch (err) {
+      if (err instanceof GenerationResolveError) { console.error(`error: client-extract pointer: ${err.message}`); process.exit(2); }
+      throw err;
+    }
+    if (!projectionPath || !projManifestPath) { console.error("resolved generation is missing the projection children"); process.exit(2); }
+    allowFallback = false;   // a validated generation is present; never degrade
+  } else {
+    if (!allowFallbackFlag) {
+      console.error("a canonical build requires --client-extract-pointer; pass --allow-fallback-mechanics to use the legacy fixed-path projection");
+      process.exit(2);
+    }
+    // npm runs scripts from coa_scraper/, but the extractor writes the projection to the REPO-ROOT
+    // reports/client_extract/ — so the default reaches it via ../reports/...
+    projectionPath = flag("--projection", "../reports/client_extract/coa_client_spell_coa.jsonl");
+    projManifestPath = flag("--projection-manifest", "../reports/client_extract/coa_client_spell_projection.manifest.json");
+    allowFallback = true;
+  }
   const entries = readJsonl(entriesPath);
   const spellRows = fs.existsSync(dbPath) ? readJsonl(dbPath) : [];
   try {
     const { canonical, manifest } = buildMechanicsArtifact({
       entries, spellRows, projectionPath, manifestPath: projManifestPath, outDir,
-      allowFallback: has("--allow-fallback-mechanics"),
+      allowFallback,
       inputs: {
         builder_entries: { path: entriesPath, sha256: sha256File(entriesPath) },
         db_spell_tooltips: fs.existsSync(dbPath) ? { path: dbPath, sha256: sha256File(dbPath) } : null,

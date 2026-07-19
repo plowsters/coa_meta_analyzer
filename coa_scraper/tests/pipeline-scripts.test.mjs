@@ -42,6 +42,7 @@ import { normalizeSchoolMask, normalizePowerType } from "../scripts/lib/mechanic
 import { reconcileField, REASON, dbIdentityReference, applyDbIdentityGate } from "../scripts/lib/mechanics-reconcile.mjs";
 import { fieldCandidates } from "../scripts/lib/mechanics-candidates.mjs";
 import { loadAndValidateProjection, MechanicsBuildError } from "../scripts/lib/mechanics-projection.mjs";
+import { resolveGeneration, GenerationResolveError } from "../scripts/lib/generation.mjs";
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "coa-pipeline-test-"));
@@ -1209,4 +1210,69 @@ test("acceptance: kind_disagreements counts a real Builder kind disagreement (Ab
     spellRows: [], projectionPath: proj, manifestPath: man, outDir: dir, allowFallback: false,
   });
   assert.equal(out.manifest.counts.kind_disagreements, 1);
+});
+
+// --- M1.14E0 Task 7: transactional generation resolver (Node parity with the Python resolver) ---
+function writeGenerationFixture(root, projRecords) {
+  const genId = "aabbccddeeff00112233445566778899";
+  const genDir = path.join(root, `gen-${genId}`);
+  fs.mkdirSync(genDir, { recursive: true });
+  const projBody = projRecords.map((r) => JSON.stringify(r)).join("\n") + (projRecords.length ? "\n" : "");
+  const projSha = crypto.createHash("sha256").update(projBody).digest("hex");
+  fs.writeFileSync(path.join(genDir, "coa_client_spell_coa.jsonl"), projBody);
+  const projManifest = {
+    schema_version: "coa-client-spell-projection-v2",
+    projection: { path: "coa_client_spell_coa.jsonl", sha256: projSha, byte_length: Buffer.byteLength(projBody) },
+    counts: { projected_records: projRecords.length, unique_spell_ids: new Set(projRecords.map((r) => r.spell_id)).size, source_records: projRecords.length },
+    client_build: "3.3.5a+patch-CZZ",
+  };
+  const pmBody = JSON.stringify(projManifest, null, 2) + "\n";
+  const pmSha = crypto.createHash("sha256").update(pmBody).digest("hex");
+  fs.writeFileSync(path.join(genDir, "coa_client_spell_projection.manifest.json"), pmBody);
+  const children = {
+    "coa_client_spell_coa.jsonl": { sha256: projSha, byte_length: Buffer.byteLength(projBody), records: projRecords.length, schema_version: "coa-client-spell-v2" },
+    "coa_client_spell_projection.manifest.json": { sha256: pmSha, byte_length: Buffer.byteLength(pmBody), records: 1, schema_version: "coa-client-spell-projection-v2" },
+  };
+  const manifest = { schema_version: "coa-client-extract-manifest-v2", generation_id: genId, published_at: 1, predecessor_generation_id: null, children, outputs: {}, unknown_symbol_inventory: { power_type: [], school_bits: [] }, binding: {} };
+  const mBody = JSON.stringify(manifest, null, 2) + "\n";
+  const mSha = crypto.createHash("sha256").update(mBody).digest("hex");
+  fs.writeFileSync(path.join(genDir, "manifest.json"), mBody);
+  const pointer = { schema_version: "coa-client-extract-pointer-v1", generation_id: genId, manifest_path: `gen-${genId}/manifest.json`, manifest_sha256: mSha };
+  fs.writeFileSync(path.join(root, "coa_client_extract.pointer.json"), JSON.stringify(pointer, null, 2) + "\n");
+  return { genDir, genId };
+}
+
+test("resolveGeneration: validates and returns child paths", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gen-"));
+  writeGenerationFixture(dir, [validProjRec(1)]);
+  const r = resolveGeneration(dir);
+  assert.equal(r.generationId, "aabbccddeeff00112233445566778899");
+  assert.ok(r.children["coa_client_spell_coa.jsonl"].endsWith("coa_client_spell_coa.jsonl"));
+  assert.ok(fs.existsSync(r.children["coa_client_spell_projection.manifest.json"]));
+});
+
+test("resolveGeneration: manifest hash tamper fails closed", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gentamper-"));
+  const { genDir } = writeGenerationFixture(dir, [validProjRec(1)]);
+  fs.appendFileSync(path.join(genDir, "manifest.json"), "  ");
+  assert.throws(() => resolveGeneration(dir), /manifest sha256 does not match/);
+});
+
+test("resolveGeneration: a tampered child fails closed", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "genchild-"));
+  const { genDir } = writeGenerationFixture(dir, [validProjRec(1)]);
+  fs.writeFileSync(path.join(genDir, "coa_client_spell_coa.jsonl"), '{"schema_version":"coa-client-spell-v2","spell_id":999}\n');
+  assert.throws(() => resolveGeneration(dir), /sha256 mismatch/);
+});
+
+test("build via resolved generation pointer produces a canonical mechanics row", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "genbuild-"));
+  writeGenerationFixture(dir, [validProjRec(92117)]);
+  const resolved = resolveGeneration(dir);
+  const out = buildMechanicsArtifact({
+    entries: [{ spell_id: 92117, entry_id: 1, entry_type: "Ability", name: "S92117", damage_schools: [], resources: [] }],
+    spellRows: [], projectionPath: resolved.children["coa_client_spell_coa.jsonl"],
+    manifestPath: resolved.children["coa_client_spell_projection.manifest.json"], outDir: dir, allowFallback: false,
+  });
+  assert.equal(out.canonical, true);
 });

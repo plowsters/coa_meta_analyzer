@@ -173,6 +173,15 @@ def test_regenerate_writes_artifacts_with_injected_backend(tmp_path):
     ess = [json.loads(l) for l in (out / "coa_client_essence.jsonl").read_text().splitlines()]
     assert ess[0]["schema_version"] == "coa-client-essence-v1"      # raw progression, undecoded
 
+    # Task 7 producer: regenerate publishes a transactional generation + a validated pointer, and the
+    # resolver accepts it (the Node build requires this pointer for a canonical run).
+    from coa_client_extract.publish import resolve_active_generation
+    assert (out / "coa_client_extract.pointer.json").is_file()
+    resolved = resolve_active_generation(out)
+    assert set(resolved["children"]) == {"coa_client_spell_coa.jsonl", "coa_client_spell_projection.manifest.json"}
+    assert resolved["manifest"]["binding"]["policy_sha256"]
+    assert resolved["manifest"]["unknown_symbol_inventory"] == {"power_type": [], "school_bits": []}
+
 
 def test_main_fails_closed_without_stormlib(tmp_path, capsys):
     out = tmp_path / "out"

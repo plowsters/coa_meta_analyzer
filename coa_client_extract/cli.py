@@ -206,6 +206,38 @@ def regenerate(
     outputs["coa_client_spell_projection.manifest.json"] = _sha256_bytes(
         (out_dir / "coa_client_spell_projection.manifest.json").read_bytes())
 
+    # Transactional publication (Task 7 producer): publish the CoA spell projection + its manifest as an
+    # immutable generation and emit a validated pointer. The Node mechanics build (consumer) REQUIRES
+    # this pointer for a canonical run; the fixed-path files above remain only for the legacy
+    # --allow-fallback-mechanics degraded path.
+    from .publish import GenerationWriter
+    projected = [r for r in spell_records if r.get("coa_attribution", {}).get("is_coa") is True]
+    base_manifest = build_manifest(
+        backend_name=getattr(backend, "name", "unknown"),
+        backend_version=getattr(backend, "version", "unknown"),
+        stormlib_version=getattr(backend, "stormlib_version", None),
+        client_root=str(client_root), client_build=client_build, outputs={},
+        archive_plan=plan.to_dict())
+    gw = GenerationWriter(out_dir)
+    gw.add_jsonl("coa_client_spell_coa.jsonl", projected, schema_version="coa-client-spell-v2")
+    gw.add_json("coa_client_spell_projection.manifest.json", projection_manifest,
+                schema_version="coa-client-spell-projection-v2")
+    binding = {
+        "source_dbc": {
+            "Spell": {"sha256": spell_sha, "archive": spell_member.effective_archive.name,
+                      "header": {"record_count": spell_view.record_count,
+                                 "field_count": spell_view.field_count,
+                                 "record_size": spell_view.record_size}},
+            **{n: {"sha256": hashlib.sha256(m.data).hexdigest(), "archive": m.effective_archive.name}
+               for n, m in side_members.items()}},
+        "policy_sha256": policy.sha256, "anchor_set_sha256": policy.anchor_sha256,
+        "enum_policy_sha256": policy.enum_sha256,
+    }
+    gw.publish(base_manifest=base_manifest, binding=binding,
+               unknown_symbol_inventory=unknown_symbol_inventory)
+    outputs["coa_client_extract.pointer.json"] = _sha256_bytes(
+        (out_dir / "coa_client_extract.pointer.json").read_bytes())
+
     if builder_entries_path:
         from .parity import build_parity_report, flip_gate_inputs, EXPECTED_BUILDER_RECORDS
         builder_path = Path(builder_entries_path)
@@ -362,6 +394,11 @@ def main(argv: list[str] | None = None) -> int:
     wc.add_argument("--recon-only", action="store_true")
     wc.add_argument("--adjudication",
                     default="reports/client_extract/wow_class_axis_adjudication.json")
+
+    mr = sub.add_parser("mechanics-recon", help="spell-mechanics recon hard hold (blocked=3/review=4/verified=0)")
+    mr.add_argument("--client-root", required=True, type=Path)
+    mr.add_argument("--out", required=True, type=Path)
+    mr.add_argument("--stormlib", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "regenerate":
@@ -394,7 +431,42 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         return 0
+    if args.command == "mechanics-recon":
+        try:
+            report = mechanics_recon_command(args.client_root, args.out, stormlib_path=args.stormlib)
+        except BackendUnavailable as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        status = report["status"]
+        print(f"mechanics-recon: {status} ({len(report['blocking_findings'])} blocking)", file=sys.stderr)
+        return _RECON_EXIT.get(status, 1)
     return 1
+
+
+_RECON_EXIT = {"blocked": 3, "review_required": 4, "verified": 0}
+
+
+def mechanics_recon_command(client_root: Path, out_dir: Path, *, backend: ArchiveBackend | None = None,
+                            stormlib_path: str | None = None, spell_policy=None) -> dict:
+    """Run the spell-mechanics recon hard hold and write its report. Returns the report; the CLI maps
+    report['status'] to an exit code (blocked=3, review_required=4, verified=0)."""
+    from .archive_plan import discover_plan
+    from .spell_layout import load_default_policy
+    from .spell_mechanics import recon_spell_mechanics, DEFAULT_BUDGET
+    from .artifacts import write_json
+
+    if backend is None:
+        from .stormlib_backend import StormLibBackend
+        backend = StormLibBackend(stormlib_path=stormlib_path)  # may raise BackendUnavailable
+
+    plan = discover_plan(client_root)
+    policy = spell_policy or load_default_policy()
+    root, attach = plan.open_chain
+    report = recon_spell_mechanics(
+        backend, root, attach, spell_policy=policy, anchors=policy.anchors, budget=DEFAULT_BUDGET,
+        extractor_commit=_extractor_commit(), client_build=_client_build(plan))
+    write_json(report, Path(out_dir) / "coa_spell_mechanics_recon.json")
+    return report
 
 
 def wow_constants_command(client_root: Path, out_dir: Path, *, backend: ArchiveBackend | None = None,

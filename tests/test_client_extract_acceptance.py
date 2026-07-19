@@ -163,8 +163,7 @@ def client_mechanics_dir(tmp_path):
         subprocess.run(["node", "coa_scraper/scripts/build-mechanics-artifacts.mjs",
                         "--builder-entries", "coa_scraper/dist/coa_entries.jsonl",
                         "--db-spells", "coa_scraper/dist/coa_db_spell_tooltips.jsonl",
-                        "--projection", str(ce / "coa_client_spell_coa.jsonl"),
-                        "--projection-manifest", str(ce / "coa_client_spell_projection.manifest.json"),
+                        "--client-extract-pointer", str(ce / "coa_client_extract.pointer.json"),
                         "--out", str(dist)], cwd=REPO, check=True)
     except subprocess.CalledProcessError as exc:
         pytest.skip(f"client-tier build unavailable: {exc}")
