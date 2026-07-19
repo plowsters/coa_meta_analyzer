@@ -300,18 +300,44 @@ are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpower
     Design:
     [M1.14C Reconciliation and DB Sunset](superpowers/specs/2026-07-14-m1-14-c-reconciliation-db-sunset-design.md).
     Plan: [M1.14C Implementation Plan](superpowers/plans/2026-07-14-m1-14-c-reconciliation-db-sunset.md).
-  - **M1.14D** WoW constants · **M1.14E** mechanics extraction completion (deferred spell schema) ·
-    **M1.14F** test-suite audit · **M1.14G** memory-bridge/API spike. Delineated in the umbrella; each
-    gets its own spec when next in line.
-  - **M1.14E Mechanics Extraction Completion (deferred spell schema).** Extend client extraction to the
-    per-spell mechanical tables M1.14A/C deliberately deferred — `SpellCooldowns`/category cooldowns,
-    `SpellRuneCost`, the `SpellEffect` `effects[]` join (coefficients, costs, charges), and the per-spell
-    GCD operands M1.14D pushes here (`StartRecoveryTime`/`StartRecoveryCategory`, `damage_class`, GCD
-    attribute bits) — which today still resolve from the stale db/inferred tiers, and reconcile them into
-    `coa-mechanics-v1` through the M1.14C per-field precedence engine. This closes the ownership gap where
-    M1.16 would otherwise have D's conversion constants and a GCD floor/ceiling but no dependable
-    client-sourced per-spell operands. Depends on A (extraction machinery) and C (reconciliation engine);
-    independent of D. Delineated in the umbrella; gets its own spec when next in line.
+  - **M1.14D WoW Conversion Primitives.** Status: specced and implemented (branch `m1-14-d`, 15
+    commits, awaiting ff-merge to `main`; full suite green, Task 7 real-client recon frozen).
+    `coa-wow-constants-v1` — GameTable conversion primitives (`gtCombatRatings` +
+    `gtOCTClassCombatRatingScalar` for rating→%, the crit tables, `gtRegenMPPerSpt`, `ChrClasses`) plus
+    verification-labelled WotLK rules, emitted as one JSON snapshot + hashed manifest with a thin,
+    non-computing `WowConstantsRepository` reader (every formula stays M1.16). Recon froze two real
+    deviations: `gtOCTClassCombatRatingScalar` is `explicit_id`, and `ChrClasses` carries 32 classes
+    (axis `extended`, adjudicated). **Deferred out of D:** the per-spell GCD base operands
+    (`StartRecoveryTime`/`StartRecoveryCategory`, `damage_class`, GCD attribute bits) → **M1.14E** (D
+    ships only the GCD floor + standard-base constants); class-context resolution and the HP-regen pair
+    (`gtRegenHPPerSpt`+`gtOCTRegenHP`) → **M1.16** entry conditions; `gtOCTRegenMP` stays `unproven` and
+    base HP/MP are excluded (server-side). `coa_wow_constants.json` joins the M1.14C forward policy
+    gate. Design:
+    [M1.14D WoW Conversion Primitives](superpowers/specs/2026-07-17-m1-14-d-wow-constants-design.md).
+    Plan: [M1.14D Implementation Plan](superpowers/plans/2026-07-17-m1-14-d-wow-constants.md).
+  - **M1.14F** test-suite audit · **M1.14G** memory-bridge/API spike (**hardened**: no longer a mere
+    viable/not-viable spike — must resolve every discovered class resource's runtime carrier + behavior
+    via APIs/events/UI/controlled gameplay and emit `coa-resource-contract-v1` records). Delineated in
+    the umbrella; each gets its own spec when next in line.
+  - **M1.14E Mechanics Extraction Completion.** Status: specced (real-client recon done). Extend client
+    extraction to the per-spell operands M1.14A/C/D left on the stale db/inferred tiers — cooldown +
+    category cooldown, the GCD base operands D pushed here (`StartRecoveryTime`/`StartRecoveryCategory`,
+    `damage_class`, GCD attribute bits), `SpellRuneCost`, mana/rune costs, `SpellCharges`, and the
+    per-spell effect operands (all **inline in `Spell.dbc`** per stock 3.3.5a — `SpellEffect`/
+    `SpellCooldowns` are absent) — extracted losslessly and reconciled into `coa-mechanics-v1` via the
+    M1.14C per-field engine. Also carries a **mandatory offset repair**: recon proved the M1.14A
+    `Spell.dbc` column map wrong (`power_type` is col 41 not 110, `school_mask` 225 not 139), so M1.14C
+    has shipped wrong client `schools`/`power_type` — E re-adjudicates the full column map and regenerates
+    the M1.14C artifacts. And it owns the **static resource substrate**: a class-wide candidate resource
+    inventory (Insanity, Brood Marks, Stars, Souls, Maelstrom, Holy Power, … — exhaustive over all 21 CoA
+    classes is a hard gate) as `coa-resource-candidate-v1` (candidates + adjudication, **no** live claims);
+    live carrier resolution + canonical `coa-resource-contract-v1` are M1.14G, the resource state machine
+    is M1.16. Also adds an operands sidecar + CoA mechanical dependency closure and bumps the client
+    extract to `coa-client-spell-v2`. Decomposed E0 (correctness/publication) → E1 (raw operands +
+    closure) → E2 (per-slot interpretations) → E3 (static resource discovery). Depends on A + C;
+    independent of D. Design:
+    [M1.14E Mechanics Extraction Completion](superpowers/specs/2026-07-18-m1-14-e-mechanics-extraction-completion-design.md).
+    See also the [client DBC reference](data/client-dbc-reference.md).
   - **M1.14F carried-forward audit item (from M1.14B, M1 follow-up).** The `coa-builder-parity-v3`
     `per_class`/`per_tab` breakdown tables group on raw, un-canonicalized class labels, so the four
     CamelCase CoA classes (`WitchDoctor`, `WitchHunter`, `KnightOfXoroth`, `SunCleric`) surface
@@ -359,6 +385,13 @@ are in [M1.12–M1.20 Public-Release and Systems-Correctness Roadmap](superpower
   simulation remains Phase 3. **Also owns the deferred M1.14C consumer rewire:** `reporting.py` and
   downstream scoring must be updated to consume the reconciled per-field mechanics and
   `field_provenance` that M1.14C produces into `coa-mechanics-v1` but does not yet surface to users.
+  **Consumes the M1.14D/E modeling inputs and owns their entry conditions:** it reads
+  `coa-wow-constants-v1` (D's conversion primitives + rules) and the M1.14E-completed per-spell operands
+  in `coa-mechanics-v1`, and it owns the two class-context entry conditions D recorded — resolve any
+  class-indexed conversion only via an actor `wow_class_id` or a versioned, hashed CoA→`wow_class_id`
+  bridge (never inferred from power type; D emits `class_context_resolution` evidence, never a Boolean),
+  and add the HP-regen pair (`gtRegenHPPerSpt`+`gtOCTRegenHP`) only if base/passive health regen becomes
+  an explicit modeled term.
 - **M1.17 Rotation Quality.** Status: planned. Derive true core loops from the model; build-archetype
   taxonomy beyond "DoT loop"; concise opener/priority/cooldown/role sections.
 - **M1.18 Gear/Stat Interaction and Breakpoints.** Status: planned. Model-derived stat weights per
