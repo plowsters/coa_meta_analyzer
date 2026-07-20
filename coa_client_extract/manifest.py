@@ -52,3 +52,31 @@ def build_manifest_v2(
     manifest["unknown_symbol_inventory"] = unknown_symbol_inventory
     manifest["binding"] = binding
     return manifest
+
+
+def build_manifest_v3(
+    *,
+    base: dict,
+    generation_id: str,
+    published_at: int,
+    predecessor_generation_id: str | None,
+    children: dict,
+    unknown_symbol_inventory: dict,
+    binding: dict,
+    publication_state: str = "candidate",
+) -> dict:
+    """The E0R generation manifest (coa-client-extract-manifest-v3). Same shape as v2 plus an explicit
+    `publication_state` ("candidate" | "published"): a candidate manifest is NEVER pointer-resolvable, so
+    an interrupted publish leaves no half-live generation. The candidate_trust_sha256 is added by the
+    publisher over everything except the three CANDIDATE_MUTABLE_KEYS."""
+    manifest = dict(base)
+    manifest["schema_version"] = "coa-client-extract-manifest-v3"
+    manifest["outputs"] = {name: meta["sha256"] for name, meta in sorted(children.items())}
+    manifest["generation_id"] = generation_id
+    manifest["published_at"] = published_at
+    manifest["predecessor_generation_id"] = predecessor_generation_id
+    manifest["children"] = children
+    manifest["unknown_symbol_inventory"] = unknown_symbol_inventory
+    manifest["binding"] = binding
+    manifest["publication_state"] = publication_state
+    return manifest
