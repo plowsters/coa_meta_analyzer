@@ -5,7 +5,7 @@ from coa_meta.mechanics_repository import MechanicsRepository
 
 def _raw(**over):
     base = {
-        "schema_version": "coa-mechanics-v1", "spell_id": 805775, "name": "Adrenal Venom",
+        "schema_version": "coa-mechanics-v2", "spell_id": 805775, "name": "Adrenal Venom",
         "kind": "ability", "school": "nature", "schools": ["nature"],
         "field_provenance": {"schools": {"selected_source": "client_dbc", "selected_tier": "client_dbc",
                                          "selected_value": ["nature"], "selection_reason": "highest_precedence_eligible",
@@ -35,7 +35,7 @@ def test_effect_accepts_legacy_period_ms_reserializes_tick_interval():
 
 def test_repository_loads_and_round_trips_field_provenance_and_schools(tmp_path):
     row = {
-        "schema_version": "coa-mechanics-v1", "spell_id": 805775, "name": "Adrenal Venom",
+        "schema_version": "coa-mechanics-v2", "spell_id": 805775, "name": "Adrenal Venom",
         "kind": "ability", "schools": ["fire", "frost"],
         "field_provenance": {"schools": {"selected_source": "client_dbc", "selected_tier": "client_dbc",
                                          "selected_value": ["fire", "frost"], "selection_reason": "highest_precedence_eligible",

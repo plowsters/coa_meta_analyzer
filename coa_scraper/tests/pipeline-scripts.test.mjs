@@ -606,7 +606,7 @@ test("mechanics artifact builder emits client-derived spell mechanics (no Ascens
   const itemRows = buildItemRows({ itemPayloadRows: [itemPayload] });
   const summary = summarizeMechanicsArtifacts({ mechanicsRows, itemRows });
 
-  assert.equal(mechanicsRows[0].schema_version, "coa-mechanics-v1");
+  assert.equal(mechanicsRows[0].schema_version, "coa-mechanics-v2");
   assert.equal(mechanicsRows[0].spell_id, 92117);
   assert.deepEqual(mechanicsRows[0].source_node_ids, [501]);
   assert.equal(mechanicsRows[0].effects[0].effect_type, "damage");

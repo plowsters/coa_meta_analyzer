@@ -12,7 +12,18 @@ import { isPresent } from "./lib/mechanics-normalize.mjs";
 import { loadAndValidateProjection, MechanicsBuildError } from "./lib/mechanics-projection.mjs";
 import { resolveGeneration, GenerationResolveError } from "./lib/generation.mjs";
 
-const MECHANICS_SCHEMA_VERSION = "coa-mechanics-v1";
+const MECHANICS_SCHEMA_VERSION = "coa-mechanics-v2";
+
+// v2: cooldown/gcd/costs lost their only source when AscensionDB was removed, so they are null (unknown)
+// with an explicit readiness reason — NEVER a defaulted 0/1500/{} (missing != default, design B3). E1's
+// SpellCooldowns/operand extraction supplies them; until then they are honestly unavailable.
+function pendingReadiness() {
+  return {
+    cooldown_ms: { status: "unavailable", reason_code: "pending_e1_operand" },
+    gcd_ms: { status: "unavailable", reason_code: "pending_e1_operand" },
+    costs: { status: "unavailable", reason_code: "pending_e1_operand" },
+  };
+}
 
 const CLIENT_FIELDS = ["cast_time_ms", "duration_ms", "range_yards", "schools", "power_type"];
 // AscensionDB previously supplied cooldown/gcd/costs; with the DB removed these have NO canonical source
@@ -91,9 +102,10 @@ export function buildCanonicalMechanics({ entries, spellRows = [], projection = 
       cast_time_ms: selected.cast_time_ms ?? null,
       duration_ms: selected.duration_ms ?? null,
       range_yards: selected.range_yards ?? null,
-      cooldown_ms: null,               // no canonical source after AscensionDB removal (Task 12: readiness)
+      cooldown_ms: null,               // no canonical source after AscensionDB removal (null + readiness)
       gcd_ms: null,
       costs: null,
+      field_readiness: pendingReadiness(),
       generates: {},
       spends: {},
       effects,

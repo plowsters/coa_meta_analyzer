@@ -144,7 +144,9 @@ def _action_from_mechanic(node: TalentNode, mechanic: MechanicRecord, role: str)
         entry_id=node.entry_id,
         spell_id=int(node.spell_id or mechanic.spell_id),
         name=mechanic.name or node.name,
-        costs=dict(mechanic.costs),
+        # v2 costs is nullable (None = unknown). Bridge to the existing dict-typed CatalogAction here;
+        # Task 13 replaces this with a nullable field + the quantitative-readiness fail-closed gate.
+        costs=dict(mechanic.costs) if mechanic.costs is not None else {},
         generates=dict(mechanic.generates),
         spends=dict(mechanic.spends),
         cooldown_ms=mechanic.cooldown_ms or 0,
