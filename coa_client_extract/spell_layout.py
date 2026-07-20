@@ -62,6 +62,7 @@ class SpellPolicy:
     expected_absent: tuple[str, ...]
     anchor_set: dict
     _enum: dict
+    doc: dict         # the exact source payload, staged verbatim as the reviewed-policy generation child
 
     # -- recon-facing views (spell_mechanics.recon_spell_mechanics consumes these) --
     @property
@@ -243,6 +244,7 @@ def load_spell_policy(payload: dict) -> SpellPolicy:
         required_tables=required_tables,
         expected_absent=expected_absent,
         anchor_set=anchor_set, _enum={"power_types": power_types, "school_bits": school_bits},
+        doc=payload,
     )
 
 

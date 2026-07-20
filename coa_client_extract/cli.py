@@ -34,13 +34,26 @@ def regenerate(
     builder_entries_path: str | None = None,
     ca_decode_report: str | None = None,
     client_only_adjudication_path: str | None = None,
+    budget: dict | None = None,
+    validate_with_node: bool = True,
 ) -> dict:
-    import hashlib
+    """Stream a full transactional generation (design A2/A4/A5): the shared topology verifier hard-holds
+    the reviewed policy's `bound` against the opened client, every required child is streamed record-by-
+    record into a CANDIDATE generation, the candidate is validated by path in BOTH Python and Node, the
+    three-part budget is recorded, and only then is the pointer published LAST. Returns the noncanonical
+    fixed-path compatibility summary (the authoritative manifest is the generation's manifest-v3)."""
+    import resource
+    import time as _time
     from .recordview import open_view
     from .spell_layout import load_default_policy
-    from .spell_record import build_spell_v2_records
+    from .spell_record import iter_spell_records
+    from .spell_icons import iter_icon_catalog
+    from .topology import verify_source_topology, topology_matches_bound
+    from .publish import GenerationWriter, validate_candidate_generation, PublishError
+    from .spell_mechanics import three_part_budget, DEFAULT_BUDGET
     from .errors import ClientBindingError
 
+    started = _time.monotonic()
     if backend is None:
         from .stormlib_backend import StormLibBackend
         backend = StormLibBackend(stormlib_path=stormlib_path)  # may raise BackendUnavailable
@@ -50,49 +63,67 @@ def regenerate(
     policy = spell_policy or load_default_policy()
     root, attach = plan.open_chain  # StormLib root + all base+patch archives attached on top
     client_build = _client_build(plan)
+    ceilings = budget or DEFAULT_BUDGET
+
+    # === Shared full-topology hard hold (design A2) ===
+    # The SAME verifier recon uses opens every required table independently (sha256, full header, member,
+    # archive, patch chain, density, key-uniqueness) and the expected-absent set, then matches the
+    # reviewed policy's structured `bound` facet-for-facet. A canonical build never promotes values proven
+    # against a different client, and recon + regenerate can never diverge on what "the proven client" is.
+    if not policy.reviewed:
+        raise ClientBindingError("spell policy is not reviewed; refusing canonical v3 emission")
+    topology = verify_source_topology(policy, backend, root, attach)
+    topology["client_build"] = client_build          # recon holds the authoritative opened build
+    if topology["blocking"]:
+        raise ClientBindingError(f"source topology hard hold: {topology['blocking']}")
+    mismatch = topology_matches_bound(topology, policy.bound)
+    if mismatch:
+        raise ClientBindingError(f"spell policy not bound to this client: {mismatch}")
 
     spell_member = backend.read_effective_file(root, attach, "DBFilesClient\\Spell.dbc")
-
-    # Client-binding hard hold: never promote values proven against a different client. The policy must
-    # be human-reviewed AND its bound Spell.dbc sha256 + client_build must match the opened client.
-    spell_sha = hashlib.sha256(spell_member.data).hexdigest()
-    bound = policy.bound or {}
-    bound_spell_sha = ((bound.get("tables") or {}).get("Spell") or {}).get("sha256")
-    if not policy.reviewed:
-        raise ClientBindingError("spell policy is not reviewed; refusing canonical v2 emission")
-    if bound.get("client_build") != client_build or bound_spell_sha != spell_sha:
-        raise ClientBindingError(
-            f"spell policy not bound to this client: policy bound={bound.get('client_build')!r} "
-            f"Spell={str(bound_spell_sha)[:12]}, "
-            f"opened build={client_build!r} Spell={spell_sha[:12]}")
-
-    # Side tables are read best-effort: an absent side table yields no view (its joins resolve to
-    # unresolved observations) and is simply not listed among the contributing source_dbcs.
-    side_members: dict[str, object] = {}
-    side_views: dict[str, object] = {}
-    for name in ("SpellCastTimes", "SpellDuration", "SpellRange", "SpellIcon"):
-        if backend.has_file(root, attach, f"DBFilesClient\\{name}.dbc"):
-            m = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
-            side_members[name] = m
-            side_views[name] = open_view(m.data)
-
-    # Fail closed before writing canonical artifacts if the order StormLib applied disagrees
-    # with the plan's declared load order for the canonical, CoA-overridden Spell table.
+    # Fail closed before staging any canonical artifact if the order StormLib applied disagrees with the
+    # plan's declared load order for the canonical, CoA-overridden Spell table.
     validate_load_order(plan, spell_member)
+    spell_view = open_view(spell_member.data).require_dense()
 
-    provenance = {
+    # Every required side table was already proven present + dense by the topology hard hold; open them.
+    side_views: dict[str, object] = {}
+    for name in policy.required_tables:
+        if name == "Spell":
+            continue
+        m = backend.read_effective_file(root, attach, f"DBFilesClient\\{name}.dbc")
+        side_views[name] = open_view(m.data)
+
+    provenance = {                                    # hoisted ONCE to the manifest, never per row (A4)
         "base_archive": spell_member.base_archive.name,
         "patch_chain": [p.name for p in spell_member.patch_chain],
         "effective_archive": spell_member.effective_archive.name,
-        "source_dbcs": {"Spell": spell_member.effective_archive.name,
-                        **{n: m.effective_archive.name for n, m in side_members.items()}},
         "extraction_date": date.today().isoformat(),
     }
 
-    spell_view = open_view(spell_member.data).require_dense()
-    spell_records, unknown_symbol_inventory = build_spell_v2_records(
-        spell_view, side_views, policy=policy, provenance=provenance)
+    # The icon catalog hashes the ACTUAL BLP bytes; the resolver reads the effective client member (or
+    # None when the icon file is absent from the chain -> the row is `missing`).
+    def asset_resolver(client_path: str):
+        member_name = _icon_member_name(client_path)
+        if not backend.has_file(root, attach, member_name):
+            return None
+        m = backend.read_effective_file(root, attach, member_name)
+        return {"bytes": m.data, "archive": m.effective_archive.name,
+                "member": m.logical_path, "patch_chain": [p.name for p in m.patch_chain]}
+
     content_records = read_content_records(client_root / "Content")
+
+    # === stream the v3 spell children (sorted by spell_id so the cross-child merge-join is a linear scan
+    # and the icon catalog covers every spell). The full child is the compact client-DBC row: identity +
+    # normalized mechanics + coa_attribution + a compact raw block; per-row proof/provenance/evidence text
+    # are inferred from the pinned policy + manifest, never repeated per row (A4). ===
+    full_rows = sorted(iter_spell_records(spell_view, side_views, policy=policy, provenance=provenance),
+                       key=lambda r: r["spell_id"])
+    projection_rows = [{**r, "schema_version": "coa-client-spell-projection-v3"}
+                       for r in full_rows if r["coa_attribution"].get("is_coa") is True]
+    icon_rows = sorted(iter_icon_catalog(spell_view, side_views, policy=policy, asset_resolver=asset_resolver),
+                       key=lambda r: r["spell_id"])
+    unknown_symbol_inventory = _unknown_symbol_inventory(spell_view, policy)
 
     # --- advancement pipeline: read the CoA advancement graph, attribute spells, and prove parity ---
     import hashlib
@@ -101,7 +132,7 @@ def regenerate(
     from .attribution import attribute, derive_coa_skill_lines, build_skill_line_index
     from .artifacts import (
         build_advancement_records, build_class_type_records, build_tab_type_records,
-        build_essence_raw_records, fill_spell_attribution, _sha256_bytes,
+        build_essence_raw_records, _sha256_bytes,
     )
     from .decode_advancement import load_resolved_layout
     # parse_dbc/parse_positional are already imported at module scope (used by read_table above);
@@ -174,45 +205,24 @@ def regenerate(
         "extraction_date": date.today().isoformat(),
     }
     # current names come from the already-extracted spell records (Spell.dbc), not the CA string block
-    spell_names = {r["spell_id"]: r.get("name", "") for r in spell_records}
+    spell_names = {r["spell_id"]: (r.get("name") or "") for r in full_rows}
     adv_records = build_advancement_records(coa_nodes, provenance=adv_provenance,
                                             spell_names=spell_names, attribution=spell_attr)
     class_type_records = build_class_type_records(class_types)
     tab_type_records = build_tab_type_records(tab_types)
     essence_records = build_essence_raw_records(ess_raw, provenance=essence_provenance)  # raw; undecoded
-    spell_records = fill_spell_attribution(spell_records, spell_attr)
 
+    # === stage the candidate generation: every REQUIRED_CHILD streamed into gen-<uuid>/ (design A5). The
+    # generation's manifest-v3 is the AUTHORITATIVE manifest; the fixed-path summary below is noncanonical.
     out_dir.mkdir(parents=True, exist_ok=True)
-    outputs = {
-        "coa_client_spell.jsonl": write_jsonl(spell_records, out_dir / "coa_client_spell.jsonl"),
-        "coa_client_content.jsonl": write_jsonl(content_records, out_dir / "coa_client_content.jsonl"),
-        "coa_client_archive_plan.json": write_json(plan.to_dict(), out_dir / "coa_client_archive_plan.json"),
+    projection_manifest = {
+        "schema_version": "coa-client-spell-projection-manifest-v3",
+        "inclusion_rule": {"predicate": "coa_attribution.is_coa == true", "version": "m1.14e0r"},
+        "client_build": client_build, "extractor_commit": _extractor_commit(),
+        "extraction_date": date.today().isoformat(), "policy_sha256": policy.sha256,
+        "counts": {"source_records": len(full_rows), "projected_records": len(projection_rows),
+                   "unique_spell_ids": len({r["spell_id"] for r in projection_rows})},
     }
-    outputs["coa_client_advancement.jsonl"] = write_jsonl(adv_records, out_dir / "coa_client_advancement.jsonl")
-    outputs["coa_client_class_types.jsonl"] = write_jsonl(class_type_records, out_dir / "coa_client_class_types.jsonl")
-    outputs["coa_client_tab_types.jsonl"] = write_jsonl(tab_type_records, out_dir / "coa_client_tab_types.jsonl")
-    outputs["coa_client_essence.jsonl"] = write_jsonl(essence_records, out_dir / "coa_client_essence.jsonl")
-
-    from .artifacts import write_client_spell_projection
-    spell_full_path = out_dir / "coa_client_spell.jsonl"
-    projection_manifest = write_client_spell_projection(
-        spell_records, out_dir,
-        source_path=spell_full_path.name,
-        source_sha=outputs["coa_client_spell.jsonl"],
-        source_bytes=spell_full_path.stat().st_size,
-        client_build=_client_build(plan),
-        extractor_commit=_extractor_commit(),
-    )
-    outputs["coa_client_spell_coa.jsonl"] = projection_manifest["projection"]["sha256"]
-    outputs["coa_client_spell_projection.manifest.json"] = _sha256_bytes(
-        (out_dir / "coa_client_spell_projection.manifest.json").read_bytes())
-
-    # Transactional publication (Task 7 producer): publish the CoA spell projection + its manifest as an
-    # immutable generation and emit a validated pointer. The Node mechanics build (consumer) REQUIRES
-    # this pointer for a canonical run; the fixed-path files above remain only for the legacy
-    # --allow-fallback-mechanics degraded path.
-    from .publish import GenerationWriter
-    projected = [r for r in spell_records if r.get("coa_attribution", {}).get("is_coa") is True]
     base_manifest = build_manifest(
         backend_name=getattr(backend, "name", "unknown"),
         backend_version=getattr(backend, "version", "unknown"),
@@ -220,22 +230,44 @@ def regenerate(
         client_root=str(client_root), client_build=client_build, outputs={},
         archive_plan=plan.to_dict())
     gw = GenerationWriter(out_dir)
-    gw.add_jsonl("coa_client_spell_coa.jsonl", projected, schema_version="coa-client-spell-v2")
+    gw.add_jsonl("coa_client_spell.jsonl", full_rows, schema_version="coa-client-spell-v3")
+    gw.add_jsonl("coa_client_spell_coa.jsonl", projection_rows, schema_version="coa-client-spell-projection-v3")
     gw.add_json("coa_client_spell_projection.manifest.json", projection_manifest,
-                schema_version="coa-client-spell-projection-v2")
-    binding = {
-        "source_dbc": {
-            "Spell": {"sha256": spell_sha, "archive": spell_member.effective_archive.name,
-                      "header": {"record_count": spell_view.record_count,
-                                 "field_count": spell_view.field_count,
-                                 "record_size": spell_view.record_size}},
-            **{n: {"sha256": hashlib.sha256(m.data).hexdigest(), "archive": m.effective_archive.name}
-               for n, m in side_members.items()}},
-        "policy_sha256": policy.sha256, "anchor_set_sha256": policy.anchor_sha256,
-        "enum_policy_sha256": policy.enum_sha256,
-    }
-    gw.publish(base_manifest=base_manifest, binding=binding,
-               unknown_symbol_inventory=unknown_symbol_inventory)
+                schema_version="coa-client-spell-projection-manifest-v3")
+    gw.add_jsonl("coa_client_spell_icons.jsonl", icon_rows, schema_version="coa-client-spell-icons-v1")
+    gw.add_jsonl("coa_client_content.jsonl", content_records, schema_version="coa-client-content-v1")
+    gw.add_json("coa_client_archive_plan.json", plan.to_dict(), schema_version="coa-client-archive-plan-v1")
+    gw.add_jsonl("coa_client_advancement.jsonl", adv_records, schema_version="coa-client-advancement-v1")
+    gw.add_jsonl("coa_client_class_types.jsonl", class_type_records, schema_version="coa-client-class-types-v1")
+    gw.add_jsonl("coa_client_tab_types.jsonl", tab_type_records, schema_version="coa-client-tab-types-v1")
+    gw.add_jsonl("coa_client_essence.jsonl", essence_records, schema_version="coa-client-essence-v1")
+    gw.add_json("spell_layout_v2.json", policy.doc, schema_version="coa-spell-layout-v2")  # reviewed policy child
+
+    binding = {"topology": topology, "provenance": provenance, "policy_sha256": policy.sha256,
+               "anchor_set_sha256": policy.anchor_sha256, "enum_policy_sha256": policy.enum_sha256}
+    candidate = gw.publish_candidate(base_manifest=base_manifest, binding=binding,
+                                     unknown_symbol_inventory=unknown_symbol_inventory)
+
+    # === validate the candidate BY PATH in BOTH Python and Node, before the pointer flips (design A5) ===
+    validate_candidate_generation(gw.gen_dir)                 # per-child + streaming cross-child merge-join
+    if validate_with_node:
+        _node_validate_candidate(gw.gen_dir)                 # independent Node trust boundary
+
+    # === three-part budget over the ACTUAL serialized generation (bytes + peak RSS + elapsed) (A4) ===
+    serialized_bytes = sum(meta["byte_length"] for meta in gw._children.values())
+    elapsed_s = round(_time.monotonic() - started, 4)
+    peak_rss_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)  # Linux ru_maxrss is KiB
+    budget_report = three_part_budget(serialized_bytes=serialized_bytes, peak_rss_mb=peak_rss_mb,
+                                      elapsed_s=elapsed_s, ceilings=ceilings)
+    if not budget_report["within_budget"]:
+        raise PublishError(f"regenerate exceeded the three-part budget: {budget_report['breach']}")
+
+    # === publish the pointer LAST (candidate -> published; the trust digest is reproduced identically) ===
+    gw.finalize_and_publish(candidate_manifest=candidate,
+                            validation={"python": True, "node": bool(validate_with_node)},
+                            budget=budget_report)
+
+    outputs = {name: meta["sha256"] for name, meta in gw._children.items()}
     outputs["coa_client_extract.pointer.json"] = _sha256_bytes(
         (out_dir / "coa_client_extract.pointer.json").read_bytes())
 
@@ -279,6 +311,9 @@ def regenerate(
         outputs["coa_builder_parity_report.json"] = write_json(
             report, out_dir / "coa_builder_parity_report.json")
 
+    # Noncanonical fixed-path compatibility summary, produced AFTER publication — never a generation child
+    # and never able to make regenerate() fail once the pointer flipped (design A5). The authoritative
+    # manifest is gen-<uuid>/manifest.json (coa-client-extract-manifest-v3).
     manifest = build_manifest(
         backend_name=getattr(backend, "name", "unknown"),
         backend_version=getattr(backend, "version", "unknown"),
@@ -288,8 +323,11 @@ def regenerate(
         outputs=outputs,
         archive_plan=plan.to_dict(),
     )
-    # v2: the per-value domain gate's aggregate — unseen enum/bit symbols whose normalized value was
-    # withheld (raw retained). An empty inventory means every value fell inside the policy domain.
+    manifest["generation_id"] = gw.generation_id
+    manifest["publication_state"] = "published"
+    manifest["budget"] = budget_report
+    # The per-value domain gate's aggregate — unseen enum/bit symbols whose normalized value was withheld
+    # (raw retained). An empty inventory means every value fell inside the policy domain.
     manifest["unknown_symbol_inventory"] = unknown_symbol_inventory
     manifest["spell_policy_sha256"] = policy.sha256
     write_json(manifest, out_dir / "coa_client_extract_manifest.json")
@@ -320,6 +358,59 @@ def _extractor_commit():
 def _load_content_entries(path: Path) -> list[dict]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, list) else payload.get("data", [])
+
+
+def _icon_member_name(client_path: str) -> str:
+    """The SpellIcon.dbc path string -> the effective client member key. WoW stores icon paths with
+    backslashes and (usually) no extension; the BLP file is that path + '.blp'."""
+    p = client_path.replace("/", "\\")
+    if not p.lower().endswith(".blp"):
+        p += ".blp"
+    return p
+
+
+def _signed32(v: int) -> int:
+    return v - 0x1_0000_0000 if v >= 0x8000_0000 else v
+
+
+def _unknown_symbol_inventory(spell_view, policy) -> dict:
+    """The per-value domain gate's aggregate over the WHOLE table: enum/bit symbols observed at the proven
+    power_type/school_mask cells that fall OUTSIDE the reviewed policy domain (their normalized value was
+    withheld, raw retained). Empty ⇒ every observed value was in-domain. Hoisted to the manifest (A4)."""
+    sf = policy.tables["Spell"]["fields"]
+    pt_cell = sf["power_type"].cell if "power_type" in sf else None
+    sm_cell = sf["school_mask"].cell if "school_mask" in sf else None
+    allowed_pt = set(policy.enum_policy["power_types"])
+    allowed_bits = set(policy.enum_policy["school_bits"])
+    unknown_pt: set[int] = set()
+    unknown_bits: set[int] = set()
+    for rec in spell_view.records():
+        if pt_cell is not None:
+            v = _signed32(rec.u32(pt_cell))
+            if v not in allowed_pt:
+                unknown_pt.add(v)
+        if sm_cell is not None:
+            mask = rec.u32(sm_cell)
+            for b in range(32):
+                bit = 1 << b
+                if mask & bit and bit not in allowed_bits:
+                    unknown_bits.add(bit)
+    return {"power_type": sorted(unknown_pt), "school_bits": sorted(unknown_bits)}
+
+
+def _node_validate_candidate(gen_dir: Path) -> None:
+    """Run the independent Node trust boundary against the staged CANDIDATE generation by path, before the
+    pointer flips (design A5). A non-zero exit fails the canonical publish closed."""
+    import subprocess
+    from .publish import PublishError
+    script = Path(__file__).resolve().parents[1] / "coa_scraper" / "scripts" / "lib" / "generation.mjs"
+    try:
+        proc = subprocess.run(["node", str(script), "--candidate", str(gen_dir)],
+                              capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise PublishError(f"node is required to validate a canonical generation: {exc}") from exc
+    if proc.returncode != 0:
+        raise PublishError(f"Node candidate validation failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
 
 def decode_advancement(

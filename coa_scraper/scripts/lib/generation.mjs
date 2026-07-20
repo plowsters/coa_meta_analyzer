@@ -11,6 +11,61 @@ const RESERVED = new Set([MANIFEST_NAME, POINTER_NAME]);
 
 function sha256(buf) { return crypto.createHash("sha256").update(buf).digest("hex"); }
 
+// Count non-empty JSONL lines by scanning bytes — never builds (or retains) a row array (design A4:
+// "hashing the byte stream without materializing a row array"). Whitespace-only lines don't count.
+function countJsonlRecords(body) {
+  let count = 0, lineHasContent = false;
+  for (let i = 0; i < body.length; i++) {
+    const b = body[i];
+    if (b === 0x0a) { if (lineHasContent) count++; lineHasContent = false; }
+    else if (b !== 0x0d && b !== 0x20 && b !== 0x09) lineHasContent = true;
+  }
+  if (lineHasContent) count++;
+  return count;
+}
+
+const MANIFEST_SCHEMAS = new Set(["coa-client-extract-manifest-v3", "coa-client-extract-manifest-v2"]);
+
+// Validate every registered child by path (name safety, containment, sha256, byte_length, record count,
+// schema) without materializing a row array. Shared by the pointer resolver and the candidate validator.
+function validateChildrenByPath(genDir, manifest) {
+  const children = manifest.children || {};
+  const resolved = {};
+  const seen = new Set();
+  for (const [name, meta] of Object.entries(children)) {
+    assertSafeChildName(name);
+    if (seen.has(name)) throw new GenerationResolveError(`duplicate child ${name}`);
+    seen.add(name);
+    const childPath = path.resolve(genDir, name);
+    if (path.dirname(childPath) !== path.resolve(genDir)) throw new GenerationResolveError(`child ${name} escapes the generation directory`);
+    if (!fs.existsSync(childPath)) throw new GenerationResolveError(`child ${name} missing`);
+    const body = fs.readFileSync(childPath);
+    if (sha256(body) !== meta.sha256) throw new GenerationResolveError(`child ${name} sha256 mismatch`);
+    if (body.length !== meta.byte_length) throw new GenerationResolveError(`child ${name} byte_length mismatch`);
+    const records = name.endsWith(".jsonl") ? countJsonlRecords(body) : 1;
+    if (records !== meta.records) throw new GenerationResolveError(`child ${name} record count mismatch (${records} != ${meta.records})`);
+    if (!meta.schema_version) throw new GenerationResolveError(`child ${name} missing schema_version`);
+    resolved[name] = childPath;
+  }
+  return resolved;
+}
+
+// Validate a staged CANDIDATE generation by path (no pointer), so the Node trust boundary runs BEFORE the
+// pointer flips (design A5). Mirrors the Python validate_candidate_generation's structural checks; the
+// cross-child merge-join stays authoritative in Python.
+export function validateCandidateByPath(genDir) {
+  const dir = path.resolve(genDir);
+  const manifestPath = path.join(dir, MANIFEST_NAME);
+  if (!fs.existsSync(manifestPath)) throw new GenerationResolveError("candidate manifest missing");
+  let manifest;
+  try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")); }
+  catch (e) { throw new GenerationResolveError(`candidate manifest invalid JSON: ${e.message}`); }
+  if (manifest.publication_state !== "candidate") throw new GenerationResolveError(`not a candidate generation (publication_state=${manifest.publication_state})`);
+  if (manifest.schema_version !== "coa-client-extract-manifest-v3") throw new GenerationResolveError(`unsupported manifest schema_version ${manifest.schema_version}`);
+  const children = validateChildrenByPath(dir, manifest);
+  return { genDir: dir, manifest, children };
+}
+
 function assertSafeChildName(name) {
   const parts = name.split(/[\\/]/);
   if (!name || RESERVED.has(name) || path.isAbsolute(name) || parts.includes("..") ||
@@ -49,30 +104,11 @@ export function resolveGeneration(rootOrPointer) {
   // A candidate manifest is never consumable (an interrupted publish leaves no half-live generation).
   if (manifest.publication_state === "candidate") throw new GenerationResolveError("pointer resolves a candidate manifest (never publishable)");
   // Pre-E0R generations are rejected: E0R consumers require the manifest-v3 transaction.
-  if (manifest.schema_version && manifest.schema_version !== "coa-client-extract-manifest-v3" &&
-      manifest.schema_version !== "coa-client-extract-manifest-v2") {
+  if (manifest.schema_version && !MANIFEST_SCHEMAS.has(manifest.schema_version)) {
     throw new GenerationResolveError(`unsupported manifest schema_version ${manifest.schema_version}`);
   }
 
-  const children = manifest.children || {};
-  const resolved = {};
-  const seen = new Set();
-  for (const [name, meta] of Object.entries(children)) {
-    assertSafeChildName(name);
-    if (seen.has(name)) throw new GenerationResolveError(`duplicate child ${name}`);
-    seen.add(name);
-    const childPath = path.resolve(genDir, name);
-    if (path.dirname(childPath) !== genDir) throw new GenerationResolveError(`child ${name} escapes the generation directory`);
-    if (!fs.existsSync(childPath)) throw new GenerationResolveError(`child ${name} missing`);
-    const body = fs.readFileSync(childPath);
-    if (sha256(body) !== meta.sha256) throw new GenerationResolveError(`child ${name} sha256 mismatch`);
-    if (body.length !== meta.byte_length) throw new GenerationResolveError(`child ${name} byte_length mismatch`);
-    const records = name.endsWith(".jsonl")
-      ? body.toString("utf8").split("\n").filter((l) => l.trim()).length : 1;
-    if (records !== meta.records) throw new GenerationResolveError(`child ${name} record count mismatch (${records} != ${meta.records})`);
-    if (!meta.schema_version) throw new GenerationResolveError(`child ${name} missing schema_version`);
-    resolved[name] = childPath;
-  }
+  const resolved = validateChildrenByPath(genDir, manifest);
   return { generationId: genId, genDir, manifest, children: resolved };
 }
 
@@ -82,13 +118,23 @@ function isCliEntryPoint() {
   return process.argv[1] && import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href;
 }
 if (isCliEntryPoint()) {
-  const target = process.argv[2];
-  if (!target) { console.error("usage: generation.mjs <pointer-or-root>"); process.exit(2); }
-  try {
-    const r = resolveGeneration(target);
-    console.log(JSON.stringify({ generation_id: r.generationId, children: r.children }, null, 2));
-  } catch (e) {
-    console.error(`error: ${e.message}`);
-    process.exit(3);
+  const args = process.argv.slice(2);
+  if (args[0] === "--candidate") {
+    const genDir = args[1];
+    if (!genDir) { console.error("usage: generation.mjs --candidate <gen-dir>"); process.exit(2); }
+    try {
+      const r = validateCandidateByPath(genDir);
+      console.log(JSON.stringify({ candidate: true, children: Object.keys(r.children) }, null, 2));
+    } catch (e) { console.error(`error: ${e.message}`); process.exit(3); }
+  } else {
+    const target = args[0];
+    if (!target) { console.error("usage: generation.mjs <pointer-or-root> | --candidate <gen-dir>"); process.exit(2); }
+    try {
+      const r = resolveGeneration(target);
+      console.log(JSON.stringify({ generation_id: r.generationId, children: r.children }, null, 2));
+    } catch (e) {
+      console.error(`error: ${e.message}`);
+      process.exit(3);
+    }
   }
 }
