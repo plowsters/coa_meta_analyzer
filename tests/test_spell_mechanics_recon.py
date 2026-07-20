@@ -42,6 +42,8 @@ def _policy(*, reviewed, bound=None):
         columns={"power_type": 41, "school_mask": 225, "name": 136, "casting_time_index": 28},
         enum_policy={"power_types": {-2, 0, 1, 2, 3, 4, 5, 6}, "school_bits": {1, 2, 4, 8, 16, 32, 64}},
         required_tables=["Spell", "SpellCastTimes"], expected_absent=["SpellEffect"],
+        tables={"Spell": {"key_cell": 0, "unique": True, "expected_field_count": 234},
+                "SpellCastTimes": {"key_cell": 0, "unique": True, "expected_field_count": 2}},
         index_fields={"casting_time_index": "SpellCastTimes"}, reviewed=reviewed, bound=bound)
 
 
@@ -65,14 +67,20 @@ def test_review_required_when_unbound_and_delta_names_discovered_cells():
     assert r["source_pins"]["policy_sha256"] == "policyhash"
 
 
-def test_verified_when_reviewed_and_bound_matches():
+def test_verified_when_reviewed_and_structured_bound_matches():
+    # E0R verified status requires the reviewed policy's STRUCTURED bound to match the opened topology
+    # facet-for-facet (sha256 + full header + member/archive/patch chain) across every required table.
+    from coa_client_extract.topology import verify_source_topology
     b = _backend()
-    spell_sha = __import__("hashlib").sha256(
-        b.read_effective_file(Path("c.MPQ"), (Path("patch-T.MPQ"),), "DBFilesClient\\Spell.dbc").data).hexdigest()
-    bound = {"client_build": "3.3.5a+T", "source_dbc_sha256": {"Spell": spell_sha}}
+    topo = verify_source_topology(_policy(reviewed=True), b, Path("c.MPQ"), (Path("patch-T.MPQ"),))
+    tables = {t: {"sha256": s["sha256"], "header": s["header"],
+                  "source": {"member": s["member"], "effective_archive": s["effective_archive"],
+                             "patch_chain": s["patch_chain"]}} for t, s in topo["tables"].items()}
+    bound = {"client_build": "3.3.5a+T", "expected_absent": ["SpellEffect"], "tables": tables}
     r = recon_spell_mechanics(b, Path("c.MPQ"), (Path("patch-T.MPQ"),),
                               **_kwargs(_policy(reviewed=True, bound=bound)))
-    assert r["status"] == "verified" and r["blocking_findings"] == []
+    assert r["status"] == "verified", r["blocking_findings"]
+    assert r["blocking_findings"] == []
 
 
 def test_blocked_when_expected_absent_table_present():

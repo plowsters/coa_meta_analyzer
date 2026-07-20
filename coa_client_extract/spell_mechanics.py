@@ -10,6 +10,7 @@ from pathlib import Path
 from .archive_backend import ArchiveBackend
 from .errors import ArchiveError, DbcDriftError
 from .recordview import open_view
+from .topology import verify_source_topology, topology_matches_bound
 
 SCHEMA = "coa-spell-mechanics-recon-v1"
 DEFAULT_BUDGET = {"artifact_size_mb": 512, "peak_rss_mb": 4096, "elapsed_s": 600}
@@ -80,14 +81,82 @@ def _discover_index_cell(view, side_ids: set):
     return best, qualifiers
 
 
-def _bound_matches(bound, client_build, dbc_sha) -> bool:
-    if not bound or bound.get("client_build") != client_build:
+def _read_side(rec, cell, kind):
+    raw = rec.u32(cell)
+    if kind == "float":
+        return struct.unpack("<f", struct.pack("<I", raw))[0]
+    if kind == "int32":
+        return _signed(raw)
+    return raw
+
+
+def _anchor_holds(a, id_to_rec, side_by_id, index_cell, value_cell, kind) -> bool:
+    """A STATE-BEARING anchor holds when the (index_cell -> side row -> value_cell) resolution matches its
+    declared state AND value. not_applicable requires fk == 0; resolved requires a non-zero fk pointing at
+    a present side row whose value_cell equals expected_value (expected_value may itself be 0 — a resolved
+    zero, which is why the state, not the value, decides applicability)."""
+    rec = id_to_rec.get(a["spell_id"])
+    if rec is None:
         return False
-    return all(dbc_sha.get(t) == h for t, h in bound.get("source_dbc_sha256", {}).items())
+    fk = rec.u32(index_cell)
+    if a["expected_state"] == "not_applicable":
+        return fk == 0
+    if a["expected_state"] != "resolved":
+        return False
+    side = side_by_id.get(fk)
+    return fk != 0 and side is not None and _read_side(side, value_cell, kind) == a["expected_value"]
+
+
+def discover_join_pair(view, id_to_rec, side_view, *, side_id_cell, side_value_cells, anchors,
+                       side_value_kind="int32"):
+    """Discover BOTH the Spell index cell and the side value cell of a join as a jointly-unique pair.
+    For each candidate index cell (whose non-zero values are ~all valid side ids) and each candidate
+    side value cell, every state-bearing anchor must resolve THROUGH the pair. A bare FK-validity scan is
+    ambiguous (dozens of small-int columns fall in a side id range) and knowing the value cell a priori is
+    cheating; requiring the pair to be jointly unique over the state-bearing anchors breaks both."""
+    side_by_id = {r.u32(side_id_cell): r for r in side_view.records()}
+    side_ids = set(side_by_id)
+    winners: list[tuple[int, int]] = []
+    for ic in range(view.cell_count):
+        nonzero = [r.u32(ic) for r in view.records() if r.u32(ic) != 0]
+        if len(nonzero) < _MIN_SUPPORT or sum(1 for v in nonzero if v in side_ids) / len(nonzero) < 0.99:
+            continue
+        for vc in side_value_cells:
+            if all(_anchor_holds(a, id_to_rec, side_by_id, ic, vc, side_value_kind) for a in anchors):
+                winners.append((ic, vc))
+    return (winners[0] if len(winners) == 1 else None), winners
+
+
+def discover_power_type_signedness(view, id_to_rec, *, cell, anchors) -> bool:
+    """The signed int32 reading of power_type is admissible only when a STATIC health-cost anchor
+    (expected_signed == -2) reads 0xFFFFFFFE at `cell`. No anchor -> stay raw_only (return False)."""
+    if not anchors:
+        return False
+    for a in anchors:
+        rec = id_to_rec.get(a["spell_id"])
+        if rec is None or rec.u32(cell) != 0xFFFFFFFE or a.get("expected_signed") != -2:
+            return False
+    return True
+
+
+def three_part_budget(*, serialized_bytes, peak_rss_mb, elapsed_s, ceilings) -> dict:
+    """within_budget requires ALL THREE of serialized bytes, subprocess peak RSS, and elapsed to be
+    under ceiling (the shipped code estimated raw DBC bytes and ignored RSS)."""
+    size_mb = round(serialized_bytes / (1024 * 1024), 2)
+    breach = []
+    if size_mb > ceilings["artifact_size_mb"]:
+        breach.append("artifact_size_mb")
+    if peak_rss_mb > ceilings["peak_rss_mb"]:
+        breach.append("peak_rss_mb")
+    if elapsed_s > ceilings["elapsed_s"]:
+        breach.append("elapsed_s")
+    return {"serialized_mb": size_mb, "peak_rss_mb": peak_rss_mb, "elapsed_s": elapsed_s,
+            "ceilings": dict(ceilings), "within_budget": not breach, "breach": breach}
 
 
 def recon_spell_mechanics(backend: ArchiveBackend, root: Path, attach, *, spell_policy, anchors,
-                          budget=DEFAULT_BUDGET, extractor_commit: str, client_build: str) -> dict:
+                          budget=DEFAULT_BUDGET, extractor_commit: str, client_build: str,
+                          join_value_anchors=None, power_type_anchors=None) -> dict:
     started = time.monotonic()
     blocking: list[dict] = []
     dbc_sha: dict[str, str] = {}
@@ -152,38 +221,66 @@ def recon_spell_mechanics(backend: ArchiveBackend, root: Path, attach, *, spell_
                                if b not in spell_policy.enum_policy["school_bits"]})
         enum_domains["unknown_school_bits"] = unknown_bits
 
-    # topology (required/expected-absent come from the POLICY, not caller args)
-    topology = {}
-    for name in spell_policy.required_tables:
-        present = backend.has_file(root, attach, f"DBFilesClient\\{name}.dbc")
-        topology[name] = {"present": present, "required": True}
-        if not present:
-            blocking.append({"field": name, "reason": "required_table_missing"})
-    for name in spell_policy.expected_absent:
-        present = backend.has_file(root, attach, f"DBFilesClient\\{name}.dbc")
-        topology[name] = {"present": present, "expected_absent": True}
-        if present:
-            blocking.append({"field": name, "reason": "expected_absent_table_present"})
+    # topology via the ONE shared verifier (design A2) so recon and regenerate can never diverge: full
+    # header, member/archive/patch chain, density, and key-uniqueness for every required table + the
+    # expected-absent set. recon holds the authoritative opened build.
+    topology = verify_source_topology(spell_policy, backend, root, attach)
+    topology["client_build"] = client_build
+    for b in topology["blocking"]:
+        entry = {"field": b.get("table", "topology"), "reason": b["reason"]}
+        entry.update({k: v for k, v in b.items() if k not in ("table", "reason")})
+        blocking.append(entry)
+    for tname, tspec in topology["tables"].items():
+        dbc_sha.setdefault(tname, tspec["sha256"])
+
+    # optional joined-pair value-anchor discovery (design A5/A6): 8b supplies state-bearing anchors to
+    # break the FK ambiguity; power_type_anchors admit the signed int32 reading only via a static negative.
+    join_pairs: dict[str, dict] = {}
+    if join_value_anchors:
+        for field, side_name in spell_policy.index_fields.items():
+            spec = join_value_anchors.get(field)
+            if not spec:
+                continue
+            try:
+                sm = backend.read_effective_file(root, attach, f"DBFilesClient\\{side_name}.dbc")
+                side_view = open_view(sm.data)
+            except (ArchiveError, DbcDriftError):
+                continue
+            pair, winners = discover_join_pair(
+                view, id_to_rec, side_view, side_id_cell=spec.get("side_id_cell", 0),
+                side_value_cells=spec["side_value_cells"], anchors=spec["anchors"],
+                side_value_kind=spec.get("side_value_kind", "int32"))
+            join_pairs[field] = {"table": side_name, "pair": pair, "winners": winners}
+    power_type_signed = None
+    if power_type_anchors is not None:
+        pt_cell_probe = layout_proof["power_type"]["discovered_cell"]
+        if pt_cell_probe is not None:
+            power_type_signed = discover_power_type_signedness(view, id_to_rec, cell=pt_cell_probe,
+                                                               anchors=power_type_anchors)
 
     # proposed policy delta (recon proposes; it NEVER writes the policy)
     delta = {f: p["discovered_cell"] for f, p in layout_proof.items() if p["discovered_cell"] is not None}
     delta.update({f: i["discovered_cell"] for f, i in index_fk.items() if "discovered_cell" in i})
+    delta.update({f: jp["pair"] for f, jp in join_pairs.items() if jp["pair"] is not None})
+    if power_type_signed is not None:
+        delta["power_type_signed"] = power_type_signed
 
-    # real budgets: elapsed, forward artifact-size estimate, process peak RSS (Linux KiB -> MiB)
-    est_mb = round((view.record_count * view.record_size) / (1024 * 1024), 2)
+    # real budgets, ALL THREE gated: forward serialized-size estimate, process peak RSS, elapsed.
+    est_bytes = view.record_count * view.record_size
     elapsed = round(time.monotonic() - started, 4)
     rss_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)  # Linux ru_maxrss is KiB
-    budget_report = {"estimated_artifact_mb": est_mb, "elapsed_s": elapsed,
-                     "peak_rss_mb_process": rss_mb, "ceilings": dict(budget),
-                     "within_budget": est_mb <= budget["artifact_size_mb"] and elapsed <= budget["elapsed_s"]}
+    budget_report = three_part_budget(serialized_bytes=est_bytes, peak_rss_mb=rss_mb,
+                                      elapsed_s=elapsed, ceilings=budget)
     if not budget_report["within_budget"]:
-        blocking.append({"field": "budget", "reason": "over_budget"})
+        blocking.append({"field": "budget", "reason": "over_budget", "breach": budget_report["breach"]})
 
-    # lifecycle
+    # lifecycle. verified requires the reviewed policy's structured bound to match the opened topology
+    # facet-for-facet (the shared verifier), not just a client-build string.
+    bound_mismatch = topology_matches_bound(topology, getattr(spell_policy, "bound", None))
     if blocking:
         status = "blocked"
-    elif (getattr(spell_policy, "reviewed", False) and _bound_matches(getattr(spell_policy, "bound", None),
-          client_build, dbc_sha) and all(p["matches_policy"] for p in layout_proof.values())):
+    elif (getattr(spell_policy, "reviewed", False) and not bound_mismatch
+          and all(p["matches_policy"] for p in layout_proof.values())):
         status = "verified"
     else:
         status = "review_required"
@@ -195,7 +292,8 @@ def recon_spell_mechanics(backend: ArchiveBackend, root: Path, attach, *, spell_
                         "extractor_commit": extractor_commit, "client_build": client_build,
                         "effective_archive": str(member.effective_archive),
                         "patch_chain": [str(p) for p in member.patch_chain]},
-        "layout_proof": layout_proof, "index_fk": index_fk, "enum_domains": enum_domains,
+        "layout_proof": layout_proof, "index_fk": index_fk, "join_pairs": join_pairs,
+        "power_type_signed": power_type_signed, "enum_domains": enum_domains,
         "topology": topology, "proposed_policy_delta": delta, "duplicates": sorted(dupes)[:20],
         "budget": budget_report,
     }

@@ -15,7 +15,7 @@ def _dbc(rows: list[tuple[int, int]], field_count=2, string_block=b"") -> bytes:
 class _Member:
     def __init__(self, data, name, archive="patch-CZZ.MPQ", patch_chain=()):
         self.data = data
-        self.name = name
+        self.logical_path = name   # ExtractedMember exposes logical_path (not .name)
         self.effective_archive = type("A", (), {"name": archive})()
         self.patch_chain = [type("A", (), {"name": p})() for p in patch_chain]
 

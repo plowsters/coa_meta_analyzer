@@ -67,7 +67,8 @@ def verify_source_topology(policy, backend, root, attach) -> dict:
                 blocking.append({"table": name, "reason": "required_table_unreadable", "detail": str(exc)})
         tables[name] = {
             "sha256": hashlib.sha256(member.data).hexdigest(), "header": header,
-            "member": member.name, "effective_archive": member.effective_archive.name,
+            "member": getattr(member, "logical_path", None) or getattr(member, "name", None),
+            "effective_archive": member.effective_archive.name,
             "patch_chain": [p.name for p in member.patch_chain], "key_unique": unique, "dense": dense,
         }
         if policy.tables[name].get("unique", True) and not unique:
